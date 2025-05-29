@@ -129,6 +129,12 @@ fun ChatScreen(
             val recognizedText = matches?.getOrNull(0)
             if (recognizedText != null) {
                 Log.i(TAG_NAME, "Recognized text: $recognizedText")
+                messages.add(
+                    Message(
+                        message = recognizedText,
+                        isMe = true
+                    )
+                )
             }
         }
     }
