@@ -33,6 +33,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import java.util.NavigableMap
 
 private const val TAG_NAME = "ChatScreen"
 
@@ -41,16 +45,34 @@ private const val TAG_NAME = "ChatScreen"
 fun ChatScreen(
     bluetoothAdapter: BluetoothAdapter,
 ) {
+    // Bluetooth connection state
+    var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
+    var socket by remember { mutableStateOf<BluetoothSocket?>(null) }
+    var isConnecting by remember { mutableStateOf(false) }
+    var connectionError by remember { mutableStateOf<String?>(null) }
+
+    // Snackbar
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
     val permissions =
         arrayOf(
             Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.BLUETOOTH_SCAN
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.INTERNET,
         )
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
         onResult = { results ->
-            // Optionally handle permission results here
+            Log.d(TAG_NAME, "Result permissions: $results")
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    message = "You have not granted Bluetooth Permission",
+                    actionLabel = "",
+                    duration = SnackbarDuration.Short
+                )
+            }
         }
     )
     val topBarState = rememberTopAppBarState()
@@ -80,11 +102,25 @@ fun ChatScreen(
         }
     }
 
-    // Bluetooth connection state
-    var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
-    var socket by remember { mutableStateOf<BluetoothSocket?>(null) }
-    var isConnecting by remember { mutableStateOf(false) }
-    var connectionError by remember { mutableStateOf<String?>(null) }
+    // Request permissions if do not have yet
+    fun requestPermissions() {
+        val notGranted = permissions.filter { permission ->
+            ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (notGranted.isNotEmpty()) {
+            permissionLauncher.launch(notGranted.toTypedArray())
+        }
+
+        Log.d(TAG_NAME, "Missing permissions:")
+        for (permission in notGranted.toList()) {
+            Log.d(TAG_NAME, "   - $permission")
+        }
+        Log.d(TAG_NAME, "All permissions:")
+        for (permission in permissions.toList()) {
+            Log.d(TAG_NAME, "   - $permission")
+        }
+    }
 
     // Connect to device (in coroutine)
     suspend fun connectToDevice(device: BluetoothDevice): BluetoothSocket? {
@@ -102,21 +138,28 @@ fun ChatScreen(
     }
 
     fun sendBtnOnClick() {
-        if (input.isNotBlank() && socket != null && socket!!.isConnected) {
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    socket!!.outputStream.write(input.toByteArray())
-                    socket!!.outputStream.flush()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+        if (input.isNotBlank()) {
+            Log.d(TAG_NAME, "Message place - input: $input")
             messages.add(
                 Message(
                     message = input,
                     isMe = true
                 )
             )
+            // When connected, send message to device
+            if (socket != null && socket!!.isConnected) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        socket!!.outputStream.write(input.toByteArray())
+                        socket!!.outputStream.flush()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+            else {
+                requestPermissions()
+            }
             input = ""
         }
     }
@@ -151,11 +194,21 @@ fun ChatScreen(
     }
 
     fun settingBtnOnClick() {
-        pairedDevices = getPairedBluetoothDevices(bluetoothAdapter)
-        showBluetoothDialog = true
+        // Helper function to check if all permissions are granted
+        val hasRequiredPermissions = permissions.all { permission ->
+            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        }
+
+        if (hasRequiredPermissions) {
+            pairedDevices = getPairedBluetoothDevices(bluetoothAdapter)
+            showBluetoothDialog = true
+        } else {
+            requestPermissions()
+        }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         modifier = Modifier
             .navigationBarsPadding()
             .nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -169,7 +222,7 @@ fun ChatScreen(
                     Manifest.permission.BLUETOOTH_CONNECT
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
-                throw Error("No permission")
+                //throw Error("No permission")
             }
             ChatAppBar(
                 statusTxt = when {
