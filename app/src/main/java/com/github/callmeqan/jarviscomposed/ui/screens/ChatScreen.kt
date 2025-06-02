@@ -1,15 +1,17 @@
 package com.github.callmeqan.jarviscomposed.ui.screens
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.speech.RecognizerIntent
+import android.telecom.Call
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -25,13 +27,20 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.github.callmeqan.jarviscomposed.data.Message
+import com.github.callmeqan.jarviscomposed.ui.components.BluetoothDevicePickerDialog
 import com.github.callmeqan.jarviscomposed.ui.components.ChatAppBar
 import com.github.callmeqan.jarviscomposed.ui.components.MessageBox
 import com.github.callmeqan.jarviscomposed.ui.components.MessageInputField
+import com.github.callmeqan.jarviscomposed.utils.RetrofitAPI
+import com.github.callmeqan.jarviscomposed.utils.getPairedBluetoothDevices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.Callback
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import java.util.UUID
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -54,6 +63,7 @@ fun ChatScreen(
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current // Like `this` keyword in normal java class
 
     val permissions =
         arrayOf(
@@ -84,7 +94,11 @@ fun ChatScreen(
     var showBluetoothDialog by remember { mutableStateOf(false) }
     var pairedDevices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
 
-    val context = LocalContext.current
+    // Bluetooth connection state
+    var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
+    var socket by remember { mutableStateOf<BluetoothSocket?>(null) }
+    var isConnecting by remember { mutableStateOf(false) }
+    var connectionError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val notGranted = permissions.filter {
@@ -138,11 +152,12 @@ fun ChatScreen(
     }
 
     fun sendBtnOnClick() {
-        if (input.isNotBlank()) {
-            Log.d(TAG_NAME, "Message place - input: $input")
+        val copy_of_input = input
+        if (copy_of_input.isNotBlank()) {
+            Log.d(TAG_NAME, "Message place - input: $copy_of_input")
             messages.add(
                 Message(
-                    message = input,
+                    message = copy_of_input,
                     isMe = true
                 )
             )
@@ -150,7 +165,7 @@ fun ChatScreen(
             if (socket != null && socket!!.isConnected) {
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        socket!!.outputStream.write(input.toByteArray())
+                        socket!!.outputStream.write(copy_of_input.toByteArray())
                         socket!!.outputStream.flush()
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -172,6 +187,9 @@ fun ChatScreen(
             val recognizedText = matches?.getOrNull(0)
             if (recognizedText != null) {
                 Log.i(TAG_NAME, "Recognized text: $recognizedText")
+
+                // TODO: Add function to connect server, feed text to AI
+
                 messages.add(
                     Message(
                         message = recognizedText,
@@ -287,51 +305,4 @@ fun ChatScreen(
             }
         )
     }
-}
-
-@SuppressLint("MissingPermission")
-fun getPairedBluetoothDevices(adapter: BluetoothAdapter): List<BluetoothDevice> =
-    adapter.bondedDevices?.toList() ?: emptyList()
-
-@Composable
-fun BluetoothDevicePickerDialog(
-    devices: List<BluetoothDevice>,
-    onDismiss: () -> Unit,
-    onDeviceSelected: (BluetoothDevice) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Select Bluetooth Device") },
-        text = {
-            if (devices.isEmpty()) {
-                Text("No paired devices found.")
-            } else {
-                Column {
-                    devices.forEach { device ->
-                        Button(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp),
-                            onClick = { onDeviceSelected(device) }
-                        ) {
-                            if (ActivityCompat.checkSelfPermission(
-                                    LocalContext.current,
-                                    Manifest.permission.BLUETOOTH_CONNECT
-                                ) != PackageManager.PERMISSION_GRANTED
-                            ) {
-                                throw Error("no permission")
-                            }
-                            Text("${device.name ?: "Unknown"}\n${device.address}")
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
 }
