@@ -42,6 +42,10 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.UUID
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import java.util.NavigableMap
 
 private const val TAG_NAME = "ChatScreen"
 
@@ -50,18 +54,35 @@ private const val TAG_NAME = "ChatScreen"
 fun ChatScreen(
     bluetoothAdapter: BluetoothAdapter,
 ) {
+    // Bluetooth connection state
+    var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
+    var socket by remember { mutableStateOf<BluetoothSocket?>(null) }
+    var isConnecting by remember { mutableStateOf(false) }
+    var connectionError by remember { mutableStateOf<String?>(null) }
+
+    // Snackbar
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current // Like `this` keyword in normal java class
 
     val permissions =
         arrayOf(
             Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.BLUETOOTH_SCAN
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.INTERNET,
         )
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
         onResult = { results ->
-            // Optionally handle permission results here
+            Log.d(TAG_NAME, "Result permissions: $results")
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    message = "You have not granted Bluetooth Permission",
+                    actionLabel = "",
+                    duration = SnackbarDuration.Short
+                )
+            }
         }
     )
     val topBarState = rememberTopAppBarState()
@@ -72,12 +93,6 @@ fun ChatScreen(
     // For showing Bluetooth picker dialog
     var showBluetoothDialog by remember { mutableStateOf(false) }
     var pairedDevices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
-
-    // Bluetooth connection state
-    var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
-    var socket by remember { mutableStateOf<BluetoothSocket?>(null) }
-    var isConnecting by remember { mutableStateOf(false) }
-    var connectionError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val notGranted = permissions.filter {
@@ -92,6 +107,26 @@ fun ChatScreen(
         if (!bluetoothAdapter.isEnabled) {
             val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
             context.startActivity(enableBtIntent)
+        }
+    }
+
+    // Request permissions if do not have yet
+    fun requestPermissions() {
+        val notGranted = permissions.filter { permission ->
+            ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (notGranted.isNotEmpty()) {
+            permissionLauncher.launch(notGranted.toTypedArray())
+        }
+
+        Log.d(TAG_NAME, "Missing permissions:")
+        for (permission in notGranted.toList()) {
+            Log.d(TAG_NAME, "   - $permission")
+        }
+        Log.d(TAG_NAME, "All permissions:")
+        for (permission in permissions.toList()) {
+            Log.d(TAG_NAME, "   - $permission")
         }
     }
 
@@ -111,23 +146,29 @@ fun ChatScreen(
     }
 
     fun sendBtnOnClick() {
-        if (input.isNotBlank() && socket != null && socket!!.isConnected) {
-            val copy_of_input = input
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    socket!!.outputStream.write(copy_of_input.toByteArray())
-                    socket!!.outputStream.flush()
-                    Log.i(TAG_NAME, "Sent \"$copy_of_input\"")
-                } catch (e: Exception) {
-                    Log.e(TAG_NAME, "Something wrong", e)
-                }
-            }
+        val copy_of_input = input
+        if (copy_of_input.isNotBlank()) {
+            Log.d(TAG_NAME, "Message place - input: $copy_of_input")
             messages.add(
                 Message(
-                    message = input,
+                    message = copy_of_input,
                     isMe = true
                 )
             )
+            // When connected, send message to device
+            if (socket != null && socket!!.isConnected) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        socket!!.outputStream.write(copy_of_input.toByteArray())
+                        socket!!.outputStream.flush()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+            else {
+                requestPermissions()
+            }
             input = ""
         }
     }
@@ -165,11 +206,21 @@ fun ChatScreen(
     }
 
     fun settingBtnOnClick() {
-        pairedDevices = getPairedBluetoothDevices(bluetoothAdapter)
-        showBluetoothDialog = true
+        // Helper function to check if all permissions are granted
+        val hasRequiredPermissions = permissions.all { permission ->
+            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        }
+
+        if (hasRequiredPermissions) {
+            pairedDevices = getPairedBluetoothDevices(bluetoothAdapter)
+            showBluetoothDialog = true
+        } else {
+            requestPermissions()
+        }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         modifier = Modifier
             .navigationBarsPadding()
             .nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -183,7 +234,7 @@ fun ChatScreen(
                     Manifest.permission.BLUETOOTH_CONNECT
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
-                throw Error("No permission")
+                //throw Error("No permission")
             }
             ChatAppBar(
                 statusTxt = when {
@@ -249,34 +300,3 @@ fun ChatScreen(
         )
     }
 }
-
-//fun sendMessage2Server(ctx: Context, message: String, role: String = "user") {
-//    val retrofit = Retrofit.Builder()
-//        .baseUrl("https://fd57-2405-4802-a61a-8d0-2191-a0e4-4b6b-c899.ngrok-free.app/")
-//        .addConverterFactory(GsonConverterFactory.create())
-//        .build()
-//
-//    val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
-//    val chatMessage = Message(message, true)
-//
-//    Toast.makeText(ctx, "Data: " + chatMessage.message, Toast.LENGTH_SHORT).show()
-//    val call: Call<Message>? = retrofitAPI.sendMessage2Server(chatMessage)
-//
-//    call!!.enqueue(object : Callback<Message?> {
-//        override fun onResponse(call: retrofit2.Call<Message?>, response: Response<Message?>) {
-//            Toast.makeText(ctx, "Message sent to API server", Toast.LENGTH_SHORT)
-//                .show()
-//
-//            val response: Message? = response.body()
-//
-//            val responseString =
-//                "Response Code : " + "201" + "\n" + "message : " + response!!.message + "\n" + "role : "
-//            sendMessageToLog(response.message, role = "assistant")
-//            Toast.makeText(ctx, responseString, Toast.LENGTH_SHORT).show()
-//        }
-//
-//        override fun onFailure(call: retrofit2.Call<Message?>, t: Throwable) {
-//            Toast.makeText(ctx, "Error found : " + t.message, Toast.LENGTH_SHORT).show()
-//        }
-//    })
-//}
