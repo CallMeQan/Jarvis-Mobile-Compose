@@ -5,13 +5,10 @@ import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.speech.RecognizerIntent
-import android.telecom.Call
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -26,7 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.github.callmeqan.jarviscomposed.data.Message
+import com.github.callmeqan.jarviscomposed.data.ChatMessage
 import com.github.callmeqan.jarviscomposed.ui.components.BluetoothDevicePickerDialog
 import com.github.callmeqan.jarviscomposed.ui.components.ChatAppBar
 import com.github.callmeqan.jarviscomposed.ui.components.MessageBox
@@ -37,15 +34,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
+import okhttp3.OkHttpClient
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.UUID
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import java.util.NavigableMap
+import java.util.concurrent.TimeUnit
 
 private const val TAG_NAME = "ChatScreen"
 
@@ -87,7 +86,7 @@ fun ChatScreen(
     )
     val topBarState = rememberTopAppBarState()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
-    val messages = remember { mutableStateListOf<Message>() }
+    val messages = remember { mutableStateListOf<ChatMessage>() }
     var input by remember { mutableStateOf("") }
 
     // For showing Bluetooth picker dialog
@@ -130,6 +129,103 @@ fun ChatScreen(
         }
     }
 
+    fun sendCommand2Server(message: String, role: String = "user") {
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS) // Time waiting for connection
+            .readTimeout(60, TimeUnit.SECONDS)    // Time for reading data
+            .writeTimeout(60, TimeUnit.SECONDS)   // Time for writing data
+            .build()
+
+        // On below line we are creating a retrofit
+        // Builder and passing our base url
+        val retrofit = Retrofit.Builder()
+            .baseUrl("https://7cd1-2405-4802-a2d2-dd50-710c-6251-e6ae-9bcd.ngrok-free.app/")
+
+            // Custom timeout config (AI model takes a long time to respond)
+            .client(okHttpClient)
+
+            // As we are sending data in json format so we have to add Gson converter factory
+            .addConverterFactory(GsonConverterFactory.create())
+
+            // At last we are building our retrofit builder.
+            .build()
+
+        // Below line is to create an instance for our retrofit api class.
+        val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
+
+        // Passing data from our text fields to our modal class.
+        val chatMessage = ChatMessage(message, role)
+
+        // Calling a method to create a post and passing our modal class.
+        val call: Call<ChatMessage?>? = retrofitAPI.sendMessage2Server(chatMessage)
+        scope.launch{
+            snackbarHostState.showSnackbar(
+                message = "Message has being sent to server",
+                actionLabel = "",
+                duration = SnackbarDuration.Short
+            )
+        }
+
+        // On below line we are executing our method.
+        call!!.enqueue(object : Callback<ChatMessage?> {
+            override fun onResponse(call: Call<ChatMessage?>, response: Response<ChatMessage?>) {
+                // This method is called when we get response from our api.
+                scope.launch{
+                    snackbarHostState.showSnackbar(
+                        message = "Message sent to API server",
+                        actionLabel = "",
+                        duration = SnackbarDuration.Short
+                    )
+                }
+
+                // We are getting response from our body and passing it to our modal class.
+                val responseBody: ChatMessage? = response.body()
+
+                // On below line we are getting our data from modal class and adding it to our string.
+                if (response.isSuccessful){
+                    val responseString = "Response Code : " + "201" + "\n" + "message : " +responseBody!!.message + "\n" + "role : " + responseBody!!.role
+                    messages.add(
+                        ChatMessage(
+                            message = responseBody.message,
+                            role = "assistant"
+                        )
+                    )
+
+                    // Below line we are setting our string to our text view.
+                    // This method is called when we get response from our api.
+                    scope.launch{
+                        snackbarHostState.showSnackbar(
+                            message = responseString,
+                            actionLabel = "",
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+                }
+                else {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            message = "Null response from Server",
+                            actionLabel = "",
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+                }
+            }
+
+            override fun onFailure(call: Call<ChatMessage?>, t: Throwable) {
+
+                // Setting text to our text view when we get error response from API.
+                scope.launch{
+                    snackbarHostState.showSnackbar(
+                        message = "Error found : " + t.message,
+                        actionLabel = "",
+                        duration = SnackbarDuration.Short
+                    )
+                }
+            }
+        })
+    }
+
     // Connect to device (in coroutine)
     suspend fun connectToDevice(device: BluetoothDevice): BluetoothSocket? {
         return withContext(Dispatchers.IO) {
@@ -146,20 +242,25 @@ fun ChatScreen(
     }
 
     fun sendBtnOnClick() {
-        val copy_of_input = input
-        if (copy_of_input.isNotBlank()) {
-            Log.d(TAG_NAME, "Message place - input: $copy_of_input")
+        val inputCopy = input
+        if (inputCopy.isNotBlank()) {
+            Log.d(TAG_NAME, "Message place - input: $inputCopy")
             messages.add(
-                Message(
-                    message = copy_of_input,
-                    isMe = true
+                ChatMessage(
+                    message = inputCopy,
+                    role = "user"
                 )
+            )
+            // TODO: If isToAI = False (could be toggled) -> Skip this part
+            sendCommand2Server(
+                message = inputCopy,
+                role = "user",
             )
             // When connected, send message to device
             if (socket != null && socket!!.isConnected) {
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        socket!!.outputStream.write(copy_of_input.toByteArray())
+                        socket!!.outputStream.write(inputCopy.toByteArray())
                         socket!!.outputStream.flush()
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -185,9 +286,9 @@ fun ChatScreen(
                 // TODO: Add function to connect server, feed text to AI
 
                 messages.add(
-                    Message(
+                    ChatMessage(
                         message = recognizedText,
-                        isMe = true
+                        role = "user"
                     )
                 )
             }
@@ -251,8 +352,9 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .padding(paddingValues = paddingValues)
-                .padding(horizontal = 16.dp)
-                .fillMaxSize()
+                .padding(bottom = 16.dp)
+                .fillMaxSize(),
+//            verticalArrangement = Arrangement.Bottom
         ) {
             LazyColumn(
                 modifier = Modifier
