@@ -98,7 +98,6 @@ fun ChatScreen(
     var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
     var socket by remember { mutableStateOf<BluetoothSocket?>(null) }
     var isConnecting by remember { mutableStateOf(false) }
-    var connectionError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val notGranted = permissions.filter {
