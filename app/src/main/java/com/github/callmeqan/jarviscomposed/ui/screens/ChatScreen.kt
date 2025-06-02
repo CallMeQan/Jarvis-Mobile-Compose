@@ -1,15 +1,17 @@
 package com.github.callmeqan.jarviscomposed.ui.screens
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.speech.RecognizerIntent
+import android.telecom.Call
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -25,13 +27,20 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.github.callmeqan.jarviscomposed.data.Message
+import com.github.callmeqan.jarviscomposed.ui.components.BluetoothDevicePickerDialog
 import com.github.callmeqan.jarviscomposed.ui.components.ChatAppBar
 import com.github.callmeqan.jarviscomposed.ui.components.MessageBox
 import com.github.callmeqan.jarviscomposed.ui.components.MessageInputField
+import com.github.callmeqan.jarviscomposed.utils.RetrofitAPI
+import com.github.callmeqan.jarviscomposed.utils.getPairedBluetoothDevices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.Callback
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import java.util.UUID
 
 private const val TAG_NAME = "ChatScreen"
@@ -41,6 +50,8 @@ private const val TAG_NAME = "ChatScreen"
 fun ChatScreen(
     bluetoothAdapter: BluetoothAdapter,
 ) {
+    val context = LocalContext.current // Like `this` keyword in normal java class
+
     val permissions =
         arrayOf(
             Manifest.permission.BLUETOOTH_CONNECT,
@@ -62,7 +73,11 @@ fun ChatScreen(
     var showBluetoothDialog by remember { mutableStateOf(false) }
     var pairedDevices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
 
-    val context = LocalContext.current
+    // Bluetooth connection state
+    var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
+    var socket by remember { mutableStateOf<BluetoothSocket?>(null) }
+    var isConnecting by remember { mutableStateOf(false) }
+    var connectionError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val notGranted = permissions.filter {
@@ -79,12 +94,6 @@ fun ChatScreen(
             context.startActivity(enableBtIntent)
         }
     }
-
-    // Bluetooth connection state
-    var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
-    var socket by remember { mutableStateOf<BluetoothSocket?>(null) }
-    var isConnecting by remember { mutableStateOf(false) }
-    var connectionError by remember { mutableStateOf<String?>(null) }
 
     // Connect to device (in coroutine)
     suspend fun connectToDevice(device: BluetoothDevice): BluetoothSocket? {
@@ -103,12 +112,14 @@ fun ChatScreen(
 
     fun sendBtnOnClick() {
         if (input.isNotBlank() && socket != null && socket!!.isConnected) {
+            val copy_of_input = input
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    socket!!.outputStream.write(input.toByteArray())
+                    socket!!.outputStream.write(copy_of_input.toByteArray())
                     socket!!.outputStream.flush()
+                    Log.i(TAG_NAME, "Sent \"$copy_of_input\"")
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e(TAG_NAME, "Something wrong", e)
                 }
             }
             messages.add(
@@ -129,6 +140,9 @@ fun ChatScreen(
             val recognizedText = matches?.getOrNull(0)
             if (recognizedText != null) {
                 Log.i(TAG_NAME, "Recognized text: $recognizedText")
+
+                // TODO: Add function to connect server, feed text to AI
+
                 messages.add(
                     Message(
                         message = recognizedText,
@@ -236,49 +250,33 @@ fun ChatScreen(
     }
 }
 
-@SuppressLint("MissingPermission")
-fun getPairedBluetoothDevices(adapter: BluetoothAdapter): List<BluetoothDevice> =
-    adapter.bondedDevices?.toList() ?: emptyList()
-
-@Composable
-fun BluetoothDevicePickerDialog(
-    devices: List<BluetoothDevice>,
-    onDismiss: () -> Unit,
-    onDeviceSelected: (BluetoothDevice) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Select Bluetooth Device") },
-        text = {
-            if (devices.isEmpty()) {
-                Text("No paired devices found.")
-            } else {
-                Column {
-                    devices.forEach { device ->
-                        Button(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp),
-                            onClick = { onDeviceSelected(device) }
-                        ) {
-                            if (ActivityCompat.checkSelfPermission(
-                                    LocalContext.current,
-                                    Manifest.permission.BLUETOOTH_CONNECT
-                                ) != PackageManager.PERMISSION_GRANTED
-                            ) {
-                                throw Error("no permission")
-                            }
-                            Text("${device.name ?: "Unknown"}\n${device.address}")
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
+//fun sendMessage2Server(ctx: Context, message: String, role: String = "user") {
+//    val retrofit = Retrofit.Builder()
+//        .baseUrl("https://fd57-2405-4802-a61a-8d0-2191-a0e4-4b6b-c899.ngrok-free.app/")
+//        .addConverterFactory(GsonConverterFactory.create())
+//        .build()
+//
+//    val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
+//    val chatMessage = Message(message, true)
+//
+//    Toast.makeText(ctx, "Data: " + chatMessage.message, Toast.LENGTH_SHORT).show()
+//    val call: Call<Message>? = retrofitAPI.sendMessage2Server(chatMessage)
+//
+//    call!!.enqueue(object : Callback<Message?> {
+//        override fun onResponse(call: retrofit2.Call<Message?>, response: Response<Message?>) {
+//            Toast.makeText(ctx, "Message sent to API server", Toast.LENGTH_SHORT)
+//                .show()
+//
+//            val response: Message? = response.body()
+//
+//            val responseString =
+//                "Response Code : " + "201" + "\n" + "message : " + response!!.message + "\n" + "role : "
+//            sendMessageToLog(response.message, role = "assistant")
+//            Toast.makeText(ctx, responseString, Toast.LENGTH_SHORT).show()
+//        }
+//
+//        override fun onFailure(call: retrofit2.Call<Message?>, t: Throwable) {
+//            Toast.makeText(ctx, "Error found : " + t.message, Toast.LENGTH_SHORT).show()
+//        }
+//    })
+//}
