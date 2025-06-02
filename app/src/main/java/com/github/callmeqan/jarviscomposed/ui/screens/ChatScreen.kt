@@ -94,11 +94,6 @@ fun ChatScreen(
     var showBluetoothDialog by remember { mutableStateOf(false) }
     var pairedDevices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
 
-    // Bluetooth connection state
-    var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
-    var socket by remember { mutableStateOf<BluetoothSocket?>(null) }
-    var isConnecting by remember { mutableStateOf(false) }
-
     LaunchedEffect(Unit) {
         val notGranted = permissions.filter {
             ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
