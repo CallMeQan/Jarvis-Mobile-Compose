@@ -28,6 +28,7 @@
         android:theme="@style/Theme.JarvisComposed">
         <activity
             android:name=".MainActivity"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true"
             android:theme="@style/Theme.JarvisComposed">
             <intent-filter>
