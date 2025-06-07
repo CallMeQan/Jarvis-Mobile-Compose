@@ -20,11 +20,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.github.callmeqan.jarviscomposed.data.Message
+import com.github.callmeqan.jarviscomposed.data.ChatMessage
 
 @Composable
-fun MessageBox(message: Message) {
-    val modifier = if (message.isMe) {
+fun MessageBox(message: ChatMessage) {
+    val modifier = if (message.role == "user") {
         Modifier
             .padding(start = 16.dp, end = 8.dp)
             .defaultMinSize(minHeight = 40.dp)
@@ -52,13 +52,13 @@ fun MessageBox(message: Message) {
             )
     }
 
-    val boxArrangement = if (message.isMe) Alignment.CenterEnd else Alignment.CenterStart
+    val boxArrangement = if (message.role == "user") Alignment.CenterEnd else Alignment.CenterStart
 
     Box(modifier = Modifier.padding(vertical = 6.dp).fillMaxWidth(), contentAlignment = boxArrangement) {
         Row(
             verticalAlignment = Alignment.Bottom,
         ) {
-            if (!message.isMe)
+            if (message.role != "user")
                 Box(
                     modifier = Modifier
                         .size(40.dp)

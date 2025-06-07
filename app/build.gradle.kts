@@ -60,11 +60,9 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
-    // Retrofit for HTTP requests
+    // For HTTP request
     implementation(libs.retrofit)
-    // Gson converter for JSON serialization/deserialization
     implementation(libs.converter.gson)
-    // OkHttp logging interceptor (optional, for debugging)
     implementation(libs.logging.interceptor)
 
     // Load dotenv
