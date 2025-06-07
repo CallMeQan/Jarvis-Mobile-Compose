@@ -1,6 +1,6 @@
 package com.github.callmeqan.jarviscomposed.data
 
-data class Message(
+data class ChatMessage(
     val message: String,
-    val isMe: Boolean
+    val role: String = "user",
 )

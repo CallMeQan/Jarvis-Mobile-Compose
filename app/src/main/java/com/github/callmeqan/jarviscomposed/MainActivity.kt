@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.core.view.WindowCompat
 import com.github.callmeqan.jarviscomposed.ui.screens.ChatScreen
 import com.github.callmeqan.jarviscomposed.ui.theme.JarvisComposedTheme
 import io.github.cdimascio.dotenv.dotenv
@@ -17,6 +18,7 @@ open class MainActivity : ComponentActivity() {
     private lateinit var bluetoothAdapter: BluetoothAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         val dotenv = dotenv {
             directory = "./assets"
             ignoreIfMalformed = true
