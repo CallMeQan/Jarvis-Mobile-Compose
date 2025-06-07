@@ -60,12 +60,10 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
-    // Retrofit for HTTP requests
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    // Gson converter for JSON serialization/deserialization
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    // OkHttp logging interceptor (optional, for debugging)
-    implementation("com.squareup.okhttp3:logging-interceptor:4.10.0")
+    // For HTTP request
+    implementation(libs.retrofit)
+    implementation(libs.converter.gson)
+    implementation(libs.logging.interceptor)
 
     // Load dotenv
     implementation(libs.dotenv.kotlin)
