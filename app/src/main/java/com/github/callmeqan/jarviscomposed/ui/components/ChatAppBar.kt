@@ -21,10 +21,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import com.github.callmeqan.jarviscomposed.ui.screens.SettingsActivity
+
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatAppBar(statusTxt: String, settingBtnOnClick: () -> Unit) {
+    // Lấy Context
+    val context = LocalContext.current
     CenterAlignedTopAppBar(
         title = {
             Column(
@@ -72,11 +80,12 @@ fun ChatAppBar(statusTxt: String, settingBtnOnClick: () -> Unit) {
 //            }
 //        },
         actions = {
-            IconButton(onClick = settingBtnOnClick) {
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = null,
-                )
+            IconButton(onClick = {
+                // Gọi callback (nếu có) rồi mở SettingsActivity
+                settingBtnOnClick()
+                context.startActivity(Intent(context, SettingsActivity::class.java))
+            }) {
+                Icon(Icons.Outlined.Settings, contentDescription = null)
             }
         },
         scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
