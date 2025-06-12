@@ -70,7 +70,7 @@ fun SettingsScreen(
             OutlinedTextField(
                 value = urlText,
                 onValueChange = { urlText = it },
-                label = { Text("Nhập URL") },
+                label = { Text("Enter URL") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
