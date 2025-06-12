@@ -31,7 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(
+fun SettingScreen(
     viewModel: SharedViewModel,
     onNavigateToMain: () -> Unit
 ) {

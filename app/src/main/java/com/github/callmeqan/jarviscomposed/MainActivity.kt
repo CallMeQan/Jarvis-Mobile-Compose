@@ -23,7 +23,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navigation
-import com.github.callmeqan.jarviscomposed.ui.screens.SettingsScreen
+import com.github.callmeqan.jarviscomposed.ui.screens.SettingScreen
 import com.github.callmeqan.jarviscomposed.utils.SharedViewModel
 
 @Composable
@@ -52,7 +52,7 @@ fun NavApp(bluetoothAdapter: BluetoothAdapter) {
             composable("setting") { entry ->
                 val viewModel = entry.sharedViewModel<SharedViewModel>(navController)
 
-                SettingsScreen(
+                SettingScreen(
                     viewModel = viewModel,
                     onNavigateToMain = {
                         navController.navigate(route = "chat")
