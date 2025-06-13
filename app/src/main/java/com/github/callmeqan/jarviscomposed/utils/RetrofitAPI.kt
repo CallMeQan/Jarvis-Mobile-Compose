@@ -6,8 +6,15 @@ import retrofit2.http.Body
 import retrofit2.http.POST
 
 interface RetrofitAPI {
-    // we are passing a parameter as the representation of chat message
-    // on below line we are creating a method to post our data.
-    @POST("chatbot/gemma3")
-    fun sendMessage2Server(@Body clientMessage: ChatMessage?): Call<ChatMessage?>?
+    // We are passing a parameter as the representation of chat message
+
+    // Send message to a chatbot with function calling ability
+    // the code should be "fcc"
+    @POST("chatbot/function_call_chatbot")
+    fun sendToFunctionCallChatbot(@Body clientMessage: ChatMessage?): Call<ChatMessage?>?
+
+    // Send message to a chatbot to process command
+    // the code should be "bc"
+    @POST("chatbot/bluetooth_processor")
+    fun sendToCommandProcessor(@Body clientMessage: ChatMessage?): Call<ChatMessage?>?
 }

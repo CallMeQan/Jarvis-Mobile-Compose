@@ -19,6 +19,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -32,6 +33,7 @@ import com.github.callmeqan.jarviscomposed.ui.components.ChatAppBar
 import com.github.callmeqan.jarviscomposed.ui.components.MessageBox
 import com.github.callmeqan.jarviscomposed.ui.components.MessageInputField
 import com.github.callmeqan.jarviscomposed.utils.RetrofitAPI
+import com.github.callmeqan.jarviscomposed.utils.SharedViewModel
 import com.github.callmeqan.jarviscomposed.utils.getPairedBluetoothDevices
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -52,7 +54,14 @@ private const val TAG_NAME = "ChatScreen"
 @Composable
 fun ChatScreen(
     bluetoothAdapter: BluetoothAdapter,
+    viewModel: SharedViewModel,
+    onNavigate: () -> Unit
 ) {
+    // Get state from View Model
+    val stateURL = viewModel.url
+    val stateChatHistory = viewModel.chatHistory
+    val stateDevice = viewModel.device
+
     // Bluetooth connection state
     var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
     var socket by remember { mutableStateOf<BluetoothSocket?>(null) }
@@ -86,19 +95,25 @@ fun ChatScreen(
     )
     val topBarState = rememberTopAppBarState()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
-    val messages = remember { mutableStateListOf<ChatMessage>() }
     var input by remember { mutableStateOf("") }
+
+    // Get chat History from view model
+    var messages = remember { mutableStateListOf<ChatMessage>() }
+    if (messages.isEmpty()) {
+        messages = stateChatHistory
+    }
 
     // For showing Bluetooth picker dialog
     var showBluetoothDialog by remember { mutableStateOf(false) }
-    var pairedDevices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
+    var pairedDevices = remember { mutableStateListOf<BluetoothDevice>() }
 
     LaunchedEffect(Unit) {
         val notGranted = permissions.filter {
             ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (notGranted.isNotEmpty()) {
-            permissionLauncher.launch(notGranted.toTypedArray())
+        if (stateURL == "") {
+            // Navigate to setting if stateURL is blank
+            onNavigate()
         }
     }
 
@@ -129,7 +144,8 @@ fun ChatScreen(
         }
     }
 
-    fun sendCommand2Server(message: String, role: String = "user") {
+    // Send command to server (check RetrofitAPI for the api code choices)
+    fun sendCommand2Server(message: String, role: String = "user", api: String = "fcc") {
         val okHttpClient = OkHttpClient.Builder()
             .connectTimeout(60, TimeUnit.SECONDS) // Time waiting for connection
             .readTimeout(60, TimeUnit.SECONDS)    // Time for reading data
@@ -138,17 +154,30 @@ fun ChatScreen(
 
         // On below line we are creating a retrofit
         // Builder and passing our base url
-        val retrofit = Retrofit.Builder()
-            .baseUrl("https://7cd1-2405-4802-a2d2-dd50-710c-6251-e6ae-9bcd.ngrok-free.app/")
+        val retrofit: Retrofit
+        try {
+            retrofit = Retrofit.Builder()
+                .baseUrl(viewModel.url + "/")
 
-            // Custom timeout config (AI model takes a long time to respond)
-            .client(okHttpClient)
+                // Custom timeout config (AI model takes a long time to respond)
+                .client(okHttpClient)
 
-            // As we are sending data in json format so we have to add Gson converter factory
-            .addConverterFactory(GsonConverterFactory.create())
+                // As we are sending data in json format so we have to add Gson converter factory
+                .addConverterFactory(GsonConverterFactory.create())
 
-            // At last we are building our retrofit builder.
-            .build()
+                // At last we are building our retrofit builder.
+                .build()
+        }
+        catch (e: Exception) {
+            scope.launch{
+                snackbarHostState.showSnackbar(
+                    message = "Invalid URL!",
+                    actionLabel = "",
+                    duration = SnackbarDuration.Short
+                )
+            }
+            return Unit
+        }
 
         // Below line is to create an instance for our retrofit api class.
         val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
@@ -157,7 +186,14 @@ fun ChatScreen(
         val chatMessage = ChatMessage(message, role)
 
         // Calling a method to create a post and passing our modal class.
-        val call: Call<ChatMessage?>? = retrofitAPI.sendMessage2Server(chatMessage)
+        val call: Call<ChatMessage?>?
+        if (api == "bc") {
+            call = retrofitAPI.sendToCommandProcessor(chatMessage)
+        }
+        else {
+            call = retrofitAPI.sendToFunctionCallChatbot(chatMessage)
+        }
+
         scope.launch{
             snackbarHostState.showSnackbar(
                 message = "Message has being sent to server",
@@ -184,12 +220,33 @@ fun ChatScreen(
                 // On below line we are getting our data from modal class and adding it to our string.
                 if (response.isSuccessful){
                     val responseString = "Response Code : " + "201" + "\n" + "message : " +responseBody!!.message + "\n" + "role : " + responseBody!!.role
-                    messages.add(
-                        ChatMessage(
-                            message = responseBody.message,
-                            role = "assistant"
+                    if (api == "fcc") {
+                        messages.add(
+                            ChatMessage(
+                                message = responseBody.message,
+                                role = "assistant"
+                            )
                         )
-                    )
+                    }
+                    else if (api == "bc") {
+                        // Add command of Bluetooth processor
+                        messages.add(
+                            ChatMessage(
+                                message = responseBody.message,
+                                role = "user"
+                            )
+                        )
+                    }
+                    else {
+                        // Add command of Bluetooth processor
+                        messages.add(
+                            ChatMessage(
+                                message = "Wrong API server (server-side error)!",
+                                role = "assistant"
+                            )
+                        )
+                    }
+
 
                     // Below line we are setting our string to our text view.
                     // This method is called when we get response from our api.
@@ -251,7 +308,10 @@ fun ChatScreen(
                     role = "user"
                 )
             )
-            // TODO: If isToAI = False (could be toggled) -> Skip this part
+
+            // TODO: If isToAI = False (could be toggled)
+            // TODO: 3 modes - Casual, Func call and Command LLM
+            // TODO: Func call (fcc), Command (bc) and other
             sendCommand2Server(
                 message = inputCopy,
                 role = "user",
@@ -266,9 +326,6 @@ fun ChatScreen(
                         e.printStackTrace()
                     }
                 }
-            }
-            else {
-                requestPermissions()
             }
             input = ""
         }
@@ -306,18 +363,23 @@ fun ChatScreen(
         speechLauncher.launch(intent)
     }
 
-    fun settingBtnOnClick() {
+    fun bluetoothBtnOnClick() {
         // Helper function to check if all permissions are granted
         val hasRequiredPermissions = permissions.all { permission ->
             ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
         }
 
         if (hasRequiredPermissions) {
+            // Get devices
             pairedDevices = getPairedBluetoothDevices(bluetoothAdapter)
             showBluetoothDialog = true
         } else {
             requestPermissions()
         }
+    }
+
+    fun settingBtnOnClick() {
+        onNavigate()
     }
 
     Scaffold(
@@ -345,6 +407,8 @@ fun ChatScreen(
                     else -> "Not connected"
                 },
                 settingBtnOnClick = { settingBtnOnClick() },
+                bluetoothBtnOnClick = { bluetoothBtnOnClick() },
+                showBluetoothConfig = true
             )
         },
         containerColor = Color.Transparent,
@@ -387,6 +451,10 @@ fun ChatScreen(
                 isConnecting = true
                 connectionError = null
                 connectedDevice = device
+
+                // Update view model
+                viewModel.connectTo(device)
+
                 // Try to connect in background
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
