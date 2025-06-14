@@ -10,10 +10,19 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.speech.RecognizerIntent
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,16 +31,20 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import android.graphics.Color as GraphicColor
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.github.callmeqan.jarviscomposed.data.ChatMessage
 import com.github.callmeqan.jarviscomposed.ui.components.BluetoothDevicePickerDialog
+import com.github.callmeqan.jarviscomposed.ui.components.CameraCaptureButton
 import com.github.callmeqan.jarviscomposed.ui.components.ChatAppBar
 import com.github.callmeqan.jarviscomposed.ui.components.MessageBox
 import com.github.callmeqan.jarviscomposed.ui.components.MessageInputField
@@ -42,6 +55,7 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -58,7 +72,8 @@ import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import kotlin.math.round
 
 private const val TAG_NAME = "ChatScreen"
@@ -136,6 +151,112 @@ fun ChatScreen(
         if (!bluetoothAdapter.isEnabled) {
             val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
             context.startActivity(enableBtIntent)
+        }
+    }
+
+
+
+    // Camera setup
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val previewView = PreviewView(context).apply {
+        this.scaleType = PreviewView.ScaleType.FILL_CENTER
+        implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+    }
+//    val executor = remember { Executors.newSingleThreadExecutor() }
+    val executor = remember { ContextCompat.getMainExecutor(context) }
+    val imageCapture = remember {
+        ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .build()
+    }
+
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+            != PackageManager.PERMISSION_GRANTED) {
+            permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA))
+        }
+    }
+
+    fun imageProxyToBitmap(image: ImageProxy): Bitmap {
+        val buffer = image.planes[0].buffer
+        val bytes = ByteArray(buffer.remaining()).also { buffer.get(it) }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    }
+
+    @Composable
+    fun CameraPreview(
+        imageCapture: ImageCapture,
+        modifier: Modifier = Modifier,
+//        onImageSaved: (Uri) -> Unit,
+//        onError: (ImageCaptureException) -> Unit
+    ) {
+        AndroidView(
+            modifier = modifier,
+            factory = { ctx ->
+                val previewView = PreviewView(ctx).apply {
+                    scaleType = PreviewView.ScaleType.FILL_CENTER
+                }
+
+                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                cameraProviderFuture.addListener({
+                    val cameraProvider = cameraProviderFuture.get()
+
+                    val previewUseCase = Preview.Builder()
+                        .build()
+                        .also { it.setSurfaceProvider(previewView.surfaceProvider) }
+
+                    try {
+                        cameraProvider.unbindAll()
+                        cameraProvider.bindToLifecycle(
+                            lifecycleOwner,
+                            CameraSelector.DEFAULT_BACK_CAMERA,
+                            previewUseCase,
+                            imageCapture
+                        )
+                    } catch (exc: Exception) {
+                        Log.e("CameraPreview", "Use case binding failed", exc)
+                    }
+                }, ContextCompat.getMainExecutor(ctx))
+
+                previewView
+            }
+        )
+    }
+
+    @Composable
+    fun CameraCaptureOnce(onBitmapCaptured: (Bitmap) -> Unit) {
+        val imageCapture = remember { ImageCapture.Builder().build() }
+        var captured by remember { mutableStateOf(false) }
+
+        Box(Modifier.fillMaxSize()) {
+            CameraPreview(imageCapture = imageCapture, modifier = Modifier.matchParentSize())
+
+            Button(
+                onClick = {
+                    if (!captured) {
+                        captured = true
+                        imageCapture.takePicture(
+                            executor,
+                            object : ImageCapture.OnImageCapturedCallback() {
+                                override fun onCaptureSuccess(imageProxy: ImageProxy) {
+                                    val bitmap = imageProxy.toBitmap()
+                                    imageProxy.close()
+                                    onBitmapCaptured(bitmap)
+                                }
+
+                                override fun onError(exc: ImageCaptureException) {
+                                    Log.e("CameraCapture", "Capture failed", exc)
+                                }
+                            }
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+            ) {
+                Text(if (captured) "Captured" else "Capture")
+            }
         }
     }
 
@@ -221,6 +342,82 @@ fun ChatScreen(
             // If error return -1
             return -1
         }
+    }
+    fun onResultCNN(result: Int, severMsg: String = "") {
+        if (result == 1) {
+            messages.add(
+                ChatMessage(
+                    message = "The place seems to be dark! Would you need some light?",
+                    role = "assistant"
+                )
+            )
+        }
+        else if (result == 0) {
+            messages.add(
+                ChatMessage(
+                    message = "The place seems to be bright! Would you want to turn off the light?",
+                    role = "assistant"
+                )
+            )
+        }
+        else {
+            messages.add(
+                ChatMessage(
+                    message = "There are some errors: " + severMsg,
+                    role = "assistant"
+                )
+            )
+        }
+    }
+    fun captureFrameAndRunModel(
+        context: Context,
+        imageCapture: ImageCapture,
+        executor: Executor,
+        onResult: (Int, String) -> Unit,
+    ) {
+        onResult(-1, "Before")
+        imageCapture.takePicture(
+            executor,
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(imageProxy: ImageProxy) {
+                    try {
+                        // Convert ImageProxy to Bitmap
+                        onResult(-1, "Starting")
+                        val buffer = imageProxy.planes[0].buffer
+                        val bytes = ByteArray(buffer.remaining()).also { buffer.get(it) }
+                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+
+                        onResult(-1, "Converted!")
+                        // Call your inference/model function
+                        val result = runModel(context, bitmap)
+                        if (result == 1) {
+                            onResult(result, "")
+                        }
+                        else if (result == 0) {
+                            onResult(result, "")
+                        }
+                        else {
+                            onResult(result, "")
+                        }
+
+                    } catch (e: Exception) {
+                        onResult(-1, e.toString())
+                    } finally {
+                        imageProxy.close()
+                    }
+                }
+
+                override fun onError(exception: ImageCaptureException) {
+                    onResult(-1, "ImageCaptureException!")
+                    messages.add(
+                        ChatMessage(
+                            message = "${exception.toString()}",
+                            role = "assistant"
+                        )
+                    )
+                }
+            }
+        )
     }
 
     // Request permissions if do not have yet
@@ -525,6 +722,44 @@ fun ChatScreen(
             ) {
                 items(messages.reversed()) { message ->
                     MessageBox(message = message)
+                }
+            }
+
+            var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+            Column {
+                CameraCaptureOnce { bmp ->
+                    // Use captured bitmap, e.g. display or process it
+                    Log.d("MainActivity", "Bitmap captured: ${bmp.width}×${bmp.height}")
+                    bitmap = bmp
+                }
+                bitmap?.let {
+                    Image(bitmap = it.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxWidth())
+                }
+            }
+
+//            CameraPreview(modifier = Modifier
+//                .align(Alignment.CenterHorizontally)
+//                .padding(bottom = 100.dp)
+//                .size(width = 150.dp, height = 300.dp)
+//            )
+
+            var capturing by remember { mutableStateOf(false) }
+            CameraCaptureButton(
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(16.dp)
+            ) { ->
+//                if (capturing) return@CameraCaptureButton
+//                capturing = true
+                onResultCNN(-1, "In CameraCaptureButton")
+
+                captureFrameAndRunModel(
+                    context = context,
+                    imageCapture = imageCapture,
+                    executor = executor
+                ) { result, serverMsg ->
+                    onResultCNN(result, serverMsg)
+                    capturing = false
                 }
             }
 
