@@ -45,6 +45,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import org.tensorflow.lite.DataType
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -53,6 +54,9 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
+import org.tensorflow.lite.support.image.ImageProcessor
+import org.tensorflow.lite.support.image.TensorImage
+import org.tensorflow.lite.support.image.ops.ResizeOp
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.round
@@ -136,7 +140,7 @@ fun ChatScreen(
     }
 
     // CNN model
-    val TFLITE_MODEL_NAME = "model_15kb_16ms_dataset_v3.tflite" //should be in assets folder
+    val TFLITE_MODEL_NAME = "model_15kb_13e-2ms_dataset_v3.tflite" //should be in assets folder model_17kb
     val interpreter = Interpreter(
         FileUtil.loadMappedFile(context, TFLITE_MODEL_NAME),
         Interpreter.Options() // TfLite Options
@@ -144,38 +148,18 @@ fun ChatScreen(
     val NUM_CLASSES = 1
 
     // Function for CNN model
-    fun convertBitmapToByteBuffer(bitmapIn: Bitmap, width: Int, height: Int): ByteBuffer {
-        // these value can be different for each channel if they are not then you may have single value instead of an array
-        val bitmap = Bitmap.createScaledBitmap(bitmapIn, width, height, false)
+    fun convertBitmapToByteBuffer(bitmapUnresized: Bitmap, width: Int, height: Int): ByteBuffer {
+        val imageProcessor = ImageProcessor.Builder()
+            .add(ResizeOp(height, width, ResizeOp.ResizeMethod.BILINEAR))
+            .build()
 
-        // For Int8
-        // val inputImage = ByteBuffer.allocateDirect(width * height * 3 * 1)
-        // For float32:
-        val inputImage = ByteBuffer.allocateDirect(4 * width * height * 3)
-        inputImage.order(ByteOrder.nativeOrder())
+        // Initialize TensorImage for float32 model
+        val tensorImage = TensorImage(DataType.FLOAT32)
+        tensorImage.load(bitmapUnresized)  // loads and applies the Bitmap
+        var processedImage = imageProcessor.process(tensorImage)
 
-        val intValues = IntArray(width * height)
-        bitmap.getPixels(intValues, 0, width, 0, 0, width, height)
-        for (y in 0 until height) {
-            for (x in 0 until width) {
-                val pixel = intValues[y * width + x]
-                // Actually import android.graphics.Color but changed
-                // to GraphicColor as Compose Color is different
-                val r = GraphicColor.red(pixel)
-                val g = GraphicColor.green(pixel)
-                val b = GraphicColor.blue(pixel)
-
-                // Putting in BRG order because this model demands input in this order
-                // inputImage.put(b.toByte())
-                // inputImage.put(g.toByte())
-                // inputImage.put(r.toByte())
-                inputImage.putFloat(b.toFloat())
-                inputImage.putFloat(g.toFloat())
-                inputImage.putFloat(r.toFloat())
-            }
-        }
-        inputImage.rewind()
-        return inputImage
+        val buffer = processedImage.buffer
+        return buffer
     }
     fun loadBitmapFromAssets(context: Context, fileName: String): Bitmap {
         // Mainly for testing purposes; fileName could
@@ -185,7 +169,7 @@ fun ChatScreen(
         val inputStream = assetManager.open("test_images/" + fileName)
         return BitmapFactory.decodeStream(inputStream)
     }
-    fun runModel(bitmap: Bitmap): Int {
+    fun runModel(context: Context, bitmap: Bitmap): Int {
         /* Sample use:
         val bitmap = loadBitmapFromAssets(context, input)
         runModel(bitmap)
@@ -207,13 +191,15 @@ fun ChatScreen(
             // Get the output and status
             interpreter.run(inputBuffer, output)
             val status: Int
-
-            // Threshold: more than 0.6 will trigger action
-            if (output[0][0] >= 0.60) status = 1;
-            else status = 0;
+            if (output[0][0] > 0.6) {
+                status = 1
+            }
+            else {
+                status = 0
+            }
 
             // Write the message
-            val msg = "It is ${round(output[0][0] * 100).toString()}% dark! ${output[0][0].toString()}"
+            val msg = "It is ${round(output[0][0] * 100).toString()}% dark (${output[0][0].toString()})!"
             Log.d("InferenceResult: ", msg)
             messages.add(
                 ChatMessage(
@@ -412,10 +398,7 @@ fun ChatScreen(
     }
 
     fun sendBtnOnClick() {
-//        val inputCopy = input
-        val inputCopy = ""
-        val bitmap = loadBitmapFromAssets(context, input)
-        runModel(bitmap)
+        val inputCopy = input
         if (inputCopy.isNotBlank()) {
             Log.d(TAG_NAME, "Message place - input: $inputCopy")
             messages.add(
@@ -455,9 +438,7 @@ fun ChatScreen(
             val recognizedText = matches?.getOrNull(0)
             if (recognizedText != null) {
                 Log.i(TAG_NAME, "Recognized text: $recognizedText")
-
                 // TODO: Add function to connect server, feed text to AI
-
                 messages.add(
                     ChatMessage(
                         message = recognizedText,
