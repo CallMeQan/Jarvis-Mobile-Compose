@@ -66,6 +66,11 @@ dependencies {
     implementation(libs.converter.gson)
     implementation(libs.logging.interceptor)
 
+    // For CNN implementation
+    implementation(libs.tensorflow.lite)
+    implementation(libs.tensorflow.lite.gpu)
+    implementation(libs.tensorflow.lite.task.vision)
+
     // Load dotenv
     implementation(libs.dotenv.kotlin)
 }
