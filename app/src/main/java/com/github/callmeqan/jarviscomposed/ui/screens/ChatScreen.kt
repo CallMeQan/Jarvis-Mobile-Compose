@@ -5,8 +5,11 @@ import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.speech.RecognizerIntent
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -19,7 +22,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -27,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import android.graphics.Color as GraphicColor
 import com.github.callmeqan.jarviscomposed.data.ChatMessage
 import com.github.callmeqan.jarviscomposed.ui.components.BluetoothDevicePickerDialog
 import com.github.callmeqan.jarviscomposed.ui.components.ChatAppBar
@@ -42,11 +45,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import org.tensorflow.lite.DataType
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+
+import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.support.common.FileUtil
+import org.tensorflow.lite.support.image.ImageProcessor
+import org.tensorflow.lite.support.image.TensorImage
+import org.tensorflow.lite.support.image.ops.ResizeOp
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import kotlin.math.round
 
 private const val TAG_NAME = "ChatScreen"
 
@@ -62,17 +75,18 @@ fun ChatScreen(
     val stateChatHistory = viewModel.chatHistory
     val stateDevice = viewModel.device
 
+    // Snackbar
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current // Like `this` keyword in normal java class
+
     // Bluetooth connection state
     var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
     var socket by remember { mutableStateOf<BluetoothSocket?>(null) }
     var isConnecting by remember { mutableStateOf(false) }
     var connectionError by remember { mutableStateOf<String?>(null) }
 
-    // Snackbar
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current // Like `this` keyword in normal java class
-
+    // Bluetooth permission
     val permissions =
         arrayOf(
             Manifest.permission.BLUETOOTH_CONNECT,
@@ -93,19 +107,20 @@ fun ChatScreen(
             }
         }
     )
-    val topBarState = rememberTopAppBarState()
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
-    var input by remember { mutableStateOf("") }
-
-    // Get chat History from view model
-    var messages = remember { mutableStateListOf<ChatMessage>() }
-    if (messages.isEmpty()) {
-        messages = stateChatHistory
-    }
 
     // For showing Bluetooth picker dialog
     var showBluetoothDialog by remember { mutableStateOf(false) }
     var pairedDevices = remember { mutableStateListOf<BluetoothDevice>() }
+
+    val topBarState = rememberTopAppBarState()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
+
+    // Chatbot UIs init
+    var input by remember { mutableStateOf("") }
+    var messages = remember { mutableStateListOf<ChatMessage>() }
+    if (messages.isEmpty()) {
+        messages = stateChatHistory
+    }
 
     LaunchedEffect(Unit) {
         val notGranted = permissions.filter {
@@ -121,6 +136,90 @@ fun ChatScreen(
         if (!bluetoothAdapter.isEnabled) {
             val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
             context.startActivity(enableBtIntent)
+        }
+    }
+
+    // CNN model
+    val TFLITE_MODEL_NAME = "model_15kb_13e-2ms_dataset_v3.tflite" //should be in assets folder model_17kb
+    val interpreter = Interpreter(
+        FileUtil.loadMappedFile(context, TFLITE_MODEL_NAME),
+        Interpreter.Options() // TfLite Options
+    )
+    val NUM_CLASSES = 1
+
+    // Function for CNN model
+    fun convertBitmapToByteBuffer(bitmapUnresized: Bitmap, width: Int, height: Int): ByteBuffer {
+        val imageProcessor = ImageProcessor.Builder()
+            .add(ResizeOp(height, width, ResizeOp.ResizeMethod.BILINEAR))
+            .build()
+
+        // Initialize TensorImage for float32 model
+        val tensorImage = TensorImage(DataType.FLOAT32)
+        tensorImage.load(bitmapUnresized)  // loads and applies the Bitmap
+        var processedImage = imageProcessor.process(tensorImage)
+
+        val buffer = processedImage.buffer
+        return buffer
+    }
+    fun loadBitmapFromAssets(context: Context, fileName: String): Bitmap {
+        // Mainly for testing purposes; fileName could
+        // the name (e.g., "bright.png") of image in
+        // app/src/main/assets/images directory.
+        val assetManager = context.assets
+        val inputStream = assetManager.open("test_images/" + fileName)
+        return BitmapFactory.decodeStream(inputStream)
+    }
+    fun runModel(context: Context, bitmap: Bitmap): Int {
+        /* Sample use:
+        val bitmap = loadBitmapFromAssets(context, input)
+        runModel(bitmap)
+        */
+        try {
+            // Get input buffer; convertBitmapToByteBuffer for more info
+            val width = 224
+            val height = 224
+
+            val inputBuffer = convertBitmapToByteBuffer(bitmap, width, height)
+            inputBuffer.rewind()
+
+            // For Int8:
+            // val output = Array(1) { ByteArray(NUM_CLASSES) }
+
+            // For float32:
+            val output = Array(1) { FloatArray(NUM_CLASSES) }
+
+            // Get the output and status
+            interpreter.run(inputBuffer, output)
+            val status: Int
+            if (output[0][0] > 0.6) {
+                status = 1
+            }
+            else {
+                status = 0
+            }
+
+            // Write the message
+            val msg = "It is ${round(output[0][0] * 100).toString()}% dark (${output[0][0].toString()})!"
+            Log.d("InferenceResult: ", msg)
+            messages.add(
+                ChatMessage(
+                    message = msg,
+                    role = "assistant"
+                )
+            )
+            // If dark return 1, bright return 0
+            return status
+        }
+        catch (e: Exception) {
+            scope.launch{
+                snackbarHostState.showSnackbar(
+                    message = "Cannot inference model!",
+                    actionLabel = "",
+                    duration = SnackbarDuration.Short
+                )
+            }
+            // If error return -1
+            return -1
         }
     }
 
@@ -339,9 +438,7 @@ fun ChatScreen(
             val recognizedText = matches?.getOrNull(0)
             if (recognizedText != null) {
                 Log.i(TAG_NAME, "Recognized text: $recognizedText")
-
                 // TODO: Add function to connect server, feed text to AI
-
                 messages.add(
                     ChatMessage(
                         message = recognizedText,

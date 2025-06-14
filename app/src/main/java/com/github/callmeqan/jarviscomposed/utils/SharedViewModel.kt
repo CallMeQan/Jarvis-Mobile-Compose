@@ -1,6 +1,8 @@
 package com.github.callmeqan.jarviscomposed.utils
 
 import android.bluetooth.BluetoothDevice
+import android.content.Context
+import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.SnapshotApplyResult
@@ -25,21 +27,23 @@ class SharedViewModel() : ViewModel() {
     private val _device = mutableStateOf<BluetoothDevice?>(null)
     val device get() = _device.value
 
+    // Number of classes
+    private val _NUM_CLASSES = 2
+
     // =============================================
 
-    // Updating functions
+    // Updating URL functions
     fun updateUrl(newUrl: String) {
         _url.value = newUrl
     }
 
+    // Bluetooth functions
     fun updateDevices(newDevices: SnapshotStateList<BluetoothDevice>) {
         _devices = newDevices
     }
-
     fun connectTo(device: BluetoothDevice) {
         _device.value = device
     }
-
     fun disconnect() {
         _device.value = null
     }
