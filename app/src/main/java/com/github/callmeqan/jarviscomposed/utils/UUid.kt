@@ -19,12 +19,11 @@ class UUid(private val context: Context) {
             rawUid = UUID.randomUUID().toString()
             prefs.edit { putString("device_uid", rawUid) }
 
-            // #TODO: Save rawUid to your backend or use it in your app logic
+            // TODO: Save rawUid to your backend or use it in your app logic
             println("Generated and saved new UID: $rawUid")
         } else {
             println("Loaded existing UID: $rawUid")
         }
-
         return hasUid()
     }
 }

@@ -131,7 +131,7 @@ fun ChatScreen(
 
     // Chatbot UIs init
     var input by remember { mutableStateOf("") }
-    var messages = remember { mutableStateListOf<ChatMessage>() }
+    var messages = remember { mutableStateListOf<ChatMessage>() } //chat log
     if (messages.isEmpty()) {
         messages = stateChatHistory
     }
@@ -578,7 +578,7 @@ fun ChatScreen(
             val recognizedText = matches?.getOrNull(0)
             if (recognizedText != null) {
                 Log.i(TAG_NAME, "Recognized text: $recognizedText")
-                // TODO: Add function to connect server, feed text to AI
+                // TODO: Add function to connect server, feed text to AI / google voice recognition
                 messages.add(
                     ChatMessage(
                         message = recognizedText,
