@@ -10,7 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.Uri
+import android.graphics.Matrix
 import android.speech.RecognizerIntent
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,7 +22,6 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,7 +33,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -55,7 +53,6 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -73,7 +70,6 @@ import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import java.nio.ByteBuffer
 import java.util.concurrent.Executor
-import java.util.concurrent.Executors
 import kotlin.math.round
 
 private const val TAG_NAME = "ChatScreen"
@@ -158,17 +154,7 @@ fun ChatScreen(
 
     // Camera setup
     val lifecycleOwner = LocalLifecycleOwner.current
-    val previewView = PreviewView(context).apply {
-        this.scaleType = PreviewView.ScaleType.FILL_CENTER
-        implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-    }
-//    val executor = remember { Executors.newSingleThreadExecutor() }
     val executor = remember { ContextCompat.getMainExecutor(context) }
-    val imageCapture = remember {
-        ImageCapture.Builder()
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-            .build()
-    }
 
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
@@ -177,18 +163,10 @@ fun ChatScreen(
         }
     }
 
-    fun imageProxyToBitmap(image: ImageProxy): Bitmap {
-        val buffer = image.planes[0].buffer
-        val bytes = ByteArray(buffer.remaining()).also { buffer.get(it) }
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-    }
-
     @Composable
     fun CameraPreview(
         imageCapture: ImageCapture,
         modifier: Modifier = Modifier,
-//        onImageSaved: (Uri) -> Unit,
-//        onError: (ImageCaptureException) -> Unit
     ) {
         AndroidView(
             modifier = modifier,
@@ -223,6 +201,10 @@ fun ChatScreen(
         )
     }
 
+    fun Bitmap.rotate(degrees: Float): Bitmap {
+        val matrix = Matrix().apply { postRotate(degrees) }
+        return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
+    }
     @Composable
     fun CameraCaptureOnce(onBitmapCaptured: (Bitmap) -> Unit) {
         val imageCapture = remember { ImageCapture.Builder().build() }
@@ -239,7 +221,12 @@ fun ChatScreen(
                             executor,
                             object : ImageCapture.OnImageCapturedCallback() {
                                 override fun onCaptureSuccess(imageProxy: ImageProxy) {
-                                    val bitmap = imageProxy.toBitmap()
+                                    // As original image is rotated
+                                    // we must capture and re-rotate it.
+                                    // Must be done before putting into UI
+                                    // as it will mess things up.
+                                    var bitmap = imageProxy.toBitmap()
+                                    bitmap = bitmap.rotate(90f)
                                     imageProxy.close()
                                     onBitmapCaptured(bitmap)
                                 }
@@ -261,12 +248,12 @@ fun ChatScreen(
     }
 
     // CNN model
-    val TFLITE_MODEL_NAME = "model_15kb_13e-2ms_dataset_v3.tflite" //should be in assets folder model_17kb
+    val tfliteModelName = "model_15kb_13e-2ms_dataset_v3.tflite" //should be in assets folder model_17kb
+    val numClasses = 1
     val interpreter = Interpreter(
-        FileUtil.loadMappedFile(context, TFLITE_MODEL_NAME),
+        FileUtil.loadMappedFile(context, tfliteModelName),
         Interpreter.Options() // TfLite Options
     )
-    val NUM_CLASSES = 1
 
     // Function for CNN model
     fun convertBitmapToByteBuffer(bitmapUnresized: Bitmap, width: Int, height: Int): ByteBuffer {
@@ -277,7 +264,7 @@ fun ChatScreen(
         // Initialize TensorImage for float32 model
         val tensorImage = TensorImage(DataType.FLOAT32)
         tensorImage.load(bitmapUnresized)  // loads and applies the Bitmap
-        var processedImage = imageProcessor.process(tensorImage)
+        val processedImage = imageProcessor.process(tensorImage)
 
         val buffer = processedImage.buffer
         return buffer
@@ -304,10 +291,10 @@ fun ChatScreen(
             inputBuffer.rewind()
 
             // For Int8:
-            // val output = Array(1) { ByteArray(NUM_CLASSES) }
+            // val output = Array(1) { ByteArray(numClasses) }
 
             // For float32:
-            val output = Array(1) { FloatArray(NUM_CLASSES) }
+            val output = Array(1) { FloatArray(numClasses) }
 
             // Get the output and status
             interpreter.run(inputBuffer, output)
@@ -320,7 +307,7 @@ fun ChatScreen(
             }
 
             // Write the message
-            val msg = "It is ${round(output[0][0] * 100).toString()}% dark (${output[0][0].toString()})!"
+            val msg = "It is ${round(output[0][0] * 100)}% dark (${output[0][0]})!"
             Log.d("InferenceResult: ", msg)
             messages.add(
                 ChatMessage(
@@ -368,56 +355,6 @@ fun ChatScreen(
                 )
             )
         }
-    }
-    fun captureFrameAndRunModel(
-        context: Context,
-        imageCapture: ImageCapture,
-        executor: Executor,
-        onResult: (Int, String) -> Unit,
-    ) {
-        onResult(-1, "Before")
-        imageCapture.takePicture(
-            executor,
-            object : ImageCapture.OnImageCapturedCallback() {
-                override fun onCaptureSuccess(imageProxy: ImageProxy) {
-                    try {
-                        // Convert ImageProxy to Bitmap
-                        onResult(-1, "Starting")
-                        val buffer = imageProxy.planes[0].buffer
-                        val bytes = ByteArray(buffer.remaining()).also { buffer.get(it) }
-                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-
-                        onResult(-1, "Converted!")
-                        // Call your inference/model function
-                        val result = runModel(context, bitmap)
-                        if (result == 1) {
-                            onResult(result, "")
-                        }
-                        else if (result == 0) {
-                            onResult(result, "")
-                        }
-                        else {
-                            onResult(result, "")
-                        }
-
-                    } catch (e: Exception) {
-                        onResult(-1, e.toString())
-                    } finally {
-                        imageProxy.close()
-                    }
-                }
-
-                override fun onError(exception: ImageCaptureException) {
-                    onResult(-1, "ImageCaptureException!")
-                    messages.add(
-                        ChatMessage(
-                            message = "${exception.toString()}",
-                            role = "assistant"
-                        )
-                    )
-                }
-            }
-        )
     }
 
     // Request permissions if do not have yet
@@ -516,31 +453,34 @@ fun ChatScreen(
                 // On below line we are getting our data from modal class and adding it to our string.
                 if (response.isSuccessful){
                     val responseString = "Response Code : " + "201" + "\n" + "message : " +responseBody!!.message + "\n" + "role : " + responseBody!!.role
-                    if (api == "fcc") {
-                        messages.add(
-                            ChatMessage(
-                                message = responseBody.message,
-                                role = "assistant"
+                    // When logic, like if but funner
+                    when (api) {
+                        "fcc" -> {
+                            messages.add(
+                                ChatMessage(
+                                    message = responseBody.message,
+                                    role = "assistant"
+                                )
                             )
-                        )
-                    }
-                    else if (api == "bc") {
-                        // Add command of Bluetooth processor
-                        messages.add(
-                            ChatMessage(
-                                message = responseBody.message,
-                                role = "user"
+                        }
+                        "bc" -> {
+                            // Add command of Bluetooth processor
+                            messages.add(
+                                ChatMessage(
+                                    message = responseBody.message,
+                                    role = "user"
+                                )
                             )
-                        )
-                    }
-                    else {
-                        // Add command of Bluetooth processor
-                        messages.add(
-                            ChatMessage(
-                                message = "Wrong API server (server-side error)!",
-                                role = "assistant"
+                        }
+                        else -> {
+                            // Add command of Bluetooth processor
+                            messages.add(
+                                ChatMessage(
+                                    message = "Wrong API server (server-side error)!",
+                                    role = "assistant"
+                                )
                             )
-                        )
+                        }
                     }
 
 
@@ -712,7 +652,6 @@ fun ChatScreen(
                 .padding(paddingValues = paddingValues)
                 .padding(bottom = 16.dp)
                 .fillMaxSize(),
-//            verticalArrangement = Arrangement.Bottom
         ) {
             LazyColumn(
                 modifier = Modifier
@@ -725,41 +664,31 @@ fun ChatScreen(
                 }
             }
 
-            var bitmap by remember { mutableStateOf<Bitmap?>(null) }
-            Column {
-                CameraCaptureOnce { bmp ->
-                    // Use captured bitmap, e.g. display or process it
-                    Log.d("MainActivity", "Bitmap captured: ${bmp.width}×${bmp.height}")
-                    bitmap = bmp
-                }
-                bitmap?.let {
-                    Image(bitmap = it.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxWidth())
-                }
-            }
-
-//            CameraPreview(modifier = Modifier
-//                .align(Alignment.CenterHorizontally)
-//                .padding(bottom = 100.dp)
-//                .size(width = 150.dp, height = 300.dp)
-//            )
-
             var capturing by remember { mutableStateOf(false) }
             CameraCaptureButton(
                 modifier = Modifier
                     .align(Alignment.End)
                     .padding(16.dp)
-            ) { ->
-//                if (capturing) return@CameraCaptureButton
-//                capturing = true
-                onResultCNN(-1, "In CameraCaptureButton")
+            ) {
+                // On click function to change camera status
+                capturing = !capturing
+            }
 
-                captureFrameAndRunModel(
-                    context = context,
-                    imageCapture = imageCapture,
-                    executor = executor
-                ) { result, serverMsg ->
-                    onResultCNN(result, serverMsg)
-                    capturing = false
+            if (capturing){
+                Column {
+                    CameraCaptureOnce { bmp ->
+                        // Use captured bitmap
+                        Log.d("MainActivity", "Bitmap captured: ${bmp.width}×${bmp.height}")
+
+                        // Add bitmap to chat history
+                        messages.add(
+                            ChatMessage(message = "", image = bmp, role = "user")
+                        )
+
+                        // Inference CNN model and display request
+                        val status = runModel(context = context, bitmap = bmp)
+                        onResultCNN(status)
+                    }
                 }
             }
 
