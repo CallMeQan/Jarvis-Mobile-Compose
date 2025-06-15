@@ -21,10 +21,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Button
+import androidx.compose.ui.platform.LocalContext
+//import com.github.callmeqan.jarviscomposed.ui.screens.SettingsActivity
+
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatAppBar(statusTxt: String, settingBtnOnClick: () -> Unit) {
+fun ChatAppBar(statusTxt: String,
+               settingBtnOnClick: () -> Unit,
+               bluetoothBtnOnClick: () -> Unit = {},
+               showBluetoothConfig: Boolean = false) {
+    // Lấy Context
+    val context = LocalContext.current
     CenterAlignedTopAppBar(
         title = {
             Column(
@@ -41,13 +54,27 @@ fun ChatAppBar(statusTxt: String, settingBtnOnClick: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                Text(
-                    text = statusTxt,
-                    style = TextStyle(
-                        color = Color.White,
-                        fontSize = 14.sp,
+                // Button for Bluetooth setting
+                if (showBluetoothConfig) {
+                    Text(
+                        text = statusTxt,
+                        style = TextStyle(
+                            color = Color.White,
+                            fontSize = 14.sp,
+                        ),
+                        modifier = Modifier.clickable { bluetoothBtnOnClick() }
                     )
-                )
+                }
+                else {
+                    Text(
+                        text = statusTxt,
+                        style = TextStyle(
+                            color = Color.White,
+                            fontSize = 14.sp,
+                        )
+                    )
+                }
+
             }
         },
         modifier = Modifier
@@ -60,23 +87,14 @@ fun ChatAppBar(statusTxt: String, settingBtnOnClick: () -> Unit) {
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
             containerColor = Color(0xFF1F1F1F)
         ),
-//        navigationIcon = {
-//            IconButton(onClick = {
-//                // TODO: Navbar logic, but we don't need this?
-//            }) {
-//                Icon(
-//                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
-//                    contentDescription = null,
-//                    tint = Color.White
-//                )
-//            }
-//        },
+
         actions = {
-            IconButton(onClick = settingBtnOnClick) {
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = null,
-                )
+            IconButton(onClick = {
+                // Gọi callback (nếu có) rồi mở SettingsActivity
+                settingBtnOnClick()
+//                context.startActivity(Intent(context, SettingsActivity::class.java))
+            }) {
+                Icon(Icons.Outlined.Settings, contentDescription = null)
             }
         },
         scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
