@@ -5,12 +5,12 @@ import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.callmeqan.jarviscomposed.data.LoginRequest
 import com.github.callmeqan.jarviscomposed.data.Uid
 import com.github.callmeqan.jarviscomposed.utils.RetrofitAPI // Assuming you have a RetrofitClient
-import com.github.callmeqan.jarviscomposed.utils.UserSessionManager
+import com.github.callmeqan.jarviscomposed.utils.UUid
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,8 +33,8 @@ data class AuthScreenState(
     val loginSuccess: Boolean = false
 )
 
-class LoginViewModel(application: Application) : AndroidViewModel(application) {
-
+class LoginViewModel() : ViewModel() {
+    val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
     private val _uiState = MutableStateFlow(AuthScreenState())
     val uiState: StateFlow<AuthScreenState> = _uiState.asStateFlow()
 
@@ -81,12 +81,12 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = state.copy(isLoading = true, errorMessage = null)
             try {
-                val response = RetrofitAPI.login(LoginRequest(email = state.email, password = state.password))
+                val response = retrofitAPI.login(LoginRequest(state.email, state.password))
                 if (response.isSuccessful && response.body() != null) {
                     val loginResponse = response.body()!!
                     if (loginResponse.access_token != null && loginResponse.refresh_token != null) {
-                        UserSessionManager.saveAuthTokens(getApplication(), loginResponse.access_token, loginResponse.refresh_token)
-                        UserSessionManager.saveUserEmail(getApplication(), state.email) // Optionally save email
+                        UUid.saveAuthTokens(getApplication(), loginResponse.access_token, loginResponse.refresh_token)
+                        UUid.saveUserEmail(getApplication(), state.email) // Optionally save email
                         _uiState.value = state.copy(isLoading = false, loginSuccess = true)
                     } else {
                         _uiState.value = state.copy(isLoading = false, errorMessage = loginResponse.msg ?: "Login failed: No token received")
@@ -122,7 +122,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     password = state.password,
                     retype_password = state.retypePassword
                 )
-                val response = RetrofitAPI.register(userToRegister)
+                val response = retrofitAPI.register(userToRegister)
                 if (response.isSuccessful && response.body() != null) {
                     // Optionally handle the access token from registration if provided and app flow supports it
                     // For now, just show the success message. User might need to verify email.
@@ -143,7 +143,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     fun checkLoginStatus() {
         viewModelScope.launch {
-            if (UserSessionManager.isLoggedIn(getApplication())) {
+            if (UUid.isLoggedIn(getApplication())) {
                 _uiState.value = _uiState.value.copy(loginSuccess = true)
             }
         }

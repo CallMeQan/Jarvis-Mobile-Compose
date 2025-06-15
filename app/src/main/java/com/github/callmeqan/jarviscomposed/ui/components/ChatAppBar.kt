@@ -24,7 +24,11 @@ import androidx.compose.ui.unit.sp
 import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.Button
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import com.github.callmeqan.jarviscomposed.utils.UUid
+
 //import com.github.callmeqan.jarviscomposed.ui.screens.SettingsActivity
 
 
@@ -38,6 +42,8 @@ fun ChatAppBar(statusTxt: String,
                showBluetoothConfig: Boolean = false) {
     // Lấy Context
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val isLoggedIn = UUid.isLoggedInFlow(context).collectAsState(initial = false)
     CenterAlignedTopAppBar(
         title = {
             Column(
