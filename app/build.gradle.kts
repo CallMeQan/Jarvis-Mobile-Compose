@@ -77,6 +77,9 @@ dependencies {
         exclude(group = "org.tensorflow", module = "tensorflow-lite")
     }
 
+    // Jetpack DataStore
+    implementation(libs.androidx.datastore.preferences)
+
     // Load dotenv
     implementation(libs.dotenv.kotlin)
     implementation(libs.litert)
