@@ -67,22 +67,15 @@ dependencies {
     implementation(libs.logging.interceptor)
 
     // For CNN implementation
-    //implementation(libs.tensorflow.lite)
-    implementation(libs.tensorflow.lite.gpu){
-        exclude(group = "org.tensorflow", module = "tensorflow-lite-api")
-        exclude(group = "org.tensorflow", module = "tensorflow-lite")
-    }
-    implementation(libs.tensorflow.lite.task.vision){
-        exclude(group = "org.tensorflow", module = "tensorflow-lite-api")
-        exclude(group = "org.tensorflow", module = "tensorflow-lite")
-    }
+    implementation(libs.tensorflow.lite)
+    implementation(libs.tensorflow.lite.gpu)
+    implementation(libs.tensorflow.lite.task.vision)
 
     // Jetpack DataStore
     implementation(libs.androidx.datastore.preferences)
 
     // Load dotenv
     implementation(libs.dotenv.kotlin)
-    implementation(libs.litert)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

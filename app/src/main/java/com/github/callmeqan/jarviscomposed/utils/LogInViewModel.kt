@@ -1,20 +1,23 @@
 // viewmodels/LoginViewModel.kt
 package com.github.callmeqan.jarviscomposed.viewmodels
 
+// import android.content.Context // No longer explicitly needed as a type here if only passing getApplication()
 import android.app.Application
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.callmeqan.jarviscomposed.data.LoginRequest
 import com.github.callmeqan.jarviscomposed.data.Uid
-import com.github.callmeqan.jarviscomposed.utils.RetrofitAPI // Assuming you have a RetrofitClient
+import com.github.callmeqan.jarviscomposed.utils.RetrofitAPI
 import com.github.callmeqan.jarviscomposed.utils.UUid
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 enum class AuthMode {
     LOGIN, REGISTER
@@ -33,10 +36,16 @@ data class AuthScreenState(
     val loginSuccess: Boolean = false
 )
 
-class LoginViewModel() : ViewModel() {
-    val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
+// Change to AndroidViewModel and add constructor parameter
+class LoginViewModel(application: Application) : AndroidViewModel(application) {
+    private val _url = mutableStateOf("")
+    val url: String get() = _url.value
     private val _uiState = MutableStateFlow(AuthScreenState())
     val uiState: StateFlow<AuthScreenState> = _uiState.asStateFlow()
+
+    fun setApiUrl(newUrl: String) {
+        _url.value = newUrl
+    }
 
     fun onEmailChange(email: String) {
         _uiState.value = _uiState.value.copy(email = email, errorMessage = null)
@@ -71,8 +80,33 @@ class LoginViewModel() : ViewModel() {
         }
     }
 
+    private fun retrofitInit() {
+        // Consider if you need this method or if Retrofit setup can be more localized
+        // or handled by a dependency injection framework.
+    }
+
     private fun loginUser() {
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
+
+        val retrofit: Retrofit
+        try {
+            retrofit = Retrofit.Builder()
+                .baseUrl(url + "/") // TODO: Replace with your actual base URL from a config file or constants
+                .client(okHttpClient)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Network client setup error: ${e.message}")
+            return
+        }
+
+        val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
         val state = _uiState.value
+
         if (state.email.isBlank() || state.password.isBlank()) {
             _uiState.value = state.copy(errorMessage = "Email and password cannot be empty.")
             return
@@ -86,8 +120,8 @@ class LoginViewModel() : ViewModel() {
                     val loginResponse = response.body()!!
                     if (loginResponse.access_token != null && loginResponse.refresh_token != null) {
                         UUid.saveAuthTokens(getApplication(), loginResponse.access_token, loginResponse.refresh_token)
-                        UUid.saveUserEmail(getApplication(), state.email) // Optionally save email
-                        _uiState.value = state.copy(isLoading = false, loginSuccess = true)
+                        UUid.saveUserEmail(getApplication(), state.email)
+                        _uiState.value = _uiState.value.copy(isLoading = false, loginSuccess = true)
                     } else {
                         _uiState.value = state.copy(isLoading = false, errorMessage = loginResponse.msg ?: "Login failed: No token received")
                     }
@@ -102,7 +136,26 @@ class LoginViewModel() : ViewModel() {
     }
 
     private fun registerUser() {
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
+
+        val retrofit: Retrofit
+        try {
+            retrofit = Retrofit.Builder()
+                .baseUrl(url + "/") // TODO: Replace with your actual base URL
+                .client(okHttpClient)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Network client setup error: ${e.message}")
+            return
+        }
+        val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
         val state = _uiState.value
+
         if (state.email.isBlank() || state.password.isBlank() || state.username.isBlank() || state.name.isBlank() || state.retypePassword.isBlank()) {
             _uiState.value = state.copy(errorMessage = "All fields are required for registration.")
             return
@@ -122,14 +175,12 @@ class LoginViewModel() : ViewModel() {
                     password = state.password,
                     retype_password = state.retypePassword
                 )
-                val response = retrofitAPI.register(userToRegister)
+                val response = retrofitAPI.signUp(uid = userToRegister)
                 if (response.isSuccessful && response.body() != null) {
-                    // Optionally handle the access token from registration if provided and app flow supports it
-                    // For now, just show the success message. User might need to verify email.
                     _uiState.value = state.copy(
                         isLoading = false,
                         registrationMessage = response.body()!!.msg,
-                        authMode = AuthMode.LOGIN // Switch to login mode after successful registration message
+                        authMode = AuthMode.LOGIN
                     )
                 } else {
                     val errorMsg = response.errorBody()?.string() ?: response.message()
@@ -143,8 +194,13 @@ class LoginViewModel() : ViewModel() {
 
     fun checkLoginStatus() {
         viewModelScope.launch {
-            if (UUid.isLoggedIn(getApplication())) {
-                _uiState.value = _uiState.value.copy(loginSuccess = true)
+            UUid.isLoggedInFlow(getApplication()).collect { isLoggedIn ->
+                if (isLoggedIn) {
+                    _uiState.value = _uiState.value.copy(loginSuccess = true)
+                }
+                // Consider if you want to set loginSuccess = false here if !isLoggedIn
+                // and the user is not already in a loginSuccess = true state.
+                // This depends on how you want the UI to react if the token is cleared elsewhere.
             }
         }
     }
