@@ -44,6 +44,7 @@ import com.github.callmeqan.jarviscomposed.data.ChatMessage
 import com.github.callmeqan.jarviscomposed.ui.components.BluetoothDevicePickerDialog
 import com.github.callmeqan.jarviscomposed.ui.components.CameraCaptureButton
 import com.github.callmeqan.jarviscomposed.ui.components.ChatAppBar
+import com.github.callmeqan.jarviscomposed.ui.components.LlmModeDropUp
 import com.github.callmeqan.jarviscomposed.ui.components.MessageBox
 import com.github.callmeqan.jarviscomposed.ui.components.MessageInputField
 import com.github.callmeqan.jarviscomposed.utils.RetrofitAPI
@@ -84,6 +85,7 @@ fun ChatScreen(
     // Get state from View Model
     val stateURL = viewModel.url
     val stateChatHistory = viewModel.chatHistory
+    var apiChatbot = viewModel.apiMode
     val stateDevice = viewModel.device
 
     // Snackbar
@@ -381,7 +383,7 @@ fun ChatScreen(
     }
 
     // Send command to server (check RetrofitAPI for the api code choices)
-    fun sendCommand2Server(message: String, role: String = "user", api: String = "fcc") {
+    fun sendMessageToServer(message: String, role: String = "user", api: String = "fcc") {
         val okHttpClient = OkHttpClient.Builder()
             .connectTimeout(60, TimeUnit.SECONDS) // Time waiting for connection
             .readTimeout(60, TimeUnit.SECONDS)    // Time for reading data
@@ -423,11 +425,15 @@ fun ChatScreen(
 
         // Calling a method to create a post and passing our modal class.
         val call: Call<ChatMessage?>?
-        if (api == "bc") {
+        if (api == "chatbot/bluetooth_processor") {
             call = retrofitAPI.sendToCommandProcessor(chatMessage)
         }
-        else {
+        else if (api == "chatbot/function_call_chatbot") {
             call = retrofitAPI.sendToFunctionCallChatbot(chatMessage)
+        }
+        else {
+            // (api == "chatbot/vanilla")
+            call = retrofitAPI.sendToVanillaChatbot(chatMessage)
         }
 
         scope.launch{
@@ -458,7 +464,7 @@ fun ChatScreen(
                     val responseString = "Response Code : " + "201" + "\n" + "message : " +responseBody!!.message + "\n" + "role : " + responseBody!!.role
                     // When logic, like if but funner
                     when (api) {
-                        "fcc" -> {
+                        "chatbot/vanilla" -> {
                             messages.add(
                                 ChatMessage(
                                     message = responseBody.message,
@@ -466,12 +472,20 @@ fun ChatScreen(
                                 )
                             )
                         }
-                        "bc" -> {
+                        "chatbot/function_call_chatbot" -> {
+                            messages.add(
+                                ChatMessage(
+                                    message = responseBody.message,
+                                    role = "assistant"
+                                )
+                            )
+                        }
+                        "chatbot/bluetooth_processor" -> {
                             // Add command of Bluetooth processor
                             messages.add(
                                 ChatMessage(
                                     message = responseBody.message,
-                                    role = "user"
+                                    role = "assistant"
                                 )
                             )
                         }
@@ -548,12 +562,11 @@ fun ChatScreen(
                 )
             )
 
-            // TODO: If isToAI = False (could be toggled)
-            // TODO: 3 modes - Casual, Func call and Command LLM
-            // TODO: Func call (fcc), Command (bc) and other
-            sendCommand2Server(
+            // Send Message to chatbot
+            sendMessageToServer(
                 message = inputCopy,
                 role = "user",
+                api = apiChatbot
             )
             // When connected, send message to device
             if (socket != null && socket!!.isConnected) {
@@ -668,13 +681,20 @@ fun ChatScreen(
             }
 
             var capturing by remember { mutableStateOf(false) }
-            CameraCaptureButton(
-                modifier = Modifier
-                    .align(Alignment.End)
-                    .padding(16.dp)
-            ) {
-                // On click function to change camera status
-                capturing = !capturing
+            Row {
+                CameraCaptureButton(
+                    modifier = Modifier
+                        .padding(16.dp)
+                ) {
+                    // On click function to change camera status
+                    capturing = !capturing
+                }
+                LlmModeDropUp(
+                    viewModel = viewModel
+                ) { code ->
+                    viewModel.updateApi(newApi = code)
+                    apiChatbot = code
+                }
             }
 
             if (capturing){

@@ -18,6 +18,7 @@ lifecycleViewModel = "2.9.1"
 tensorflowLite = "2.14.0" # 2.17.0 support .so
 tfTaskVision = "0.3.1"
 cameraXGeneral = "1.4.2"
+composeTesting = "1.0.0-alpha04"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -49,6 +50,7 @@ androidx-camera-core = { group = "androidx.camera", name = "camera-core", versio
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "cameraXGeneral" }
 androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "cameraXGeneral"}
 androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "cameraXGeneral"}
+androidx-compose-testing = { group = "androidx.xr.compose", name = "compose-testing", version.ref = "composeTesting" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
