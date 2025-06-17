@@ -1,5 +1,5 @@
 // viewmodels/LoginViewModel.kt
-package com.github.callmeqan.jarviscomposed.viewmodels
+package com.github.callmeqan.jarviscomposed.utils
 
 // import android.content.Context // No longer explicitly needed as a type here if only passing getApplication()
 import android.app.Application
@@ -8,8 +8,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.callmeqan.jarviscomposed.data.LoginRequest
 import com.github.callmeqan.jarviscomposed.data.Uid
-import com.github.callmeqan.jarviscomposed.utils.RetrofitAPI
-import com.github.callmeqan.jarviscomposed.utils.UUid
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
