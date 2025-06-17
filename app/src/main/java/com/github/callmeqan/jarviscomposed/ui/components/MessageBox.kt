@@ -19,11 +19,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -62,9 +60,15 @@ fun MessageBox(message: ChatMessage) {
                 )
         }
 
-        val boxArrangement = if (message.role == "user") Alignment.CenterEnd else Alignment.CenterStart
+        val boxArrangement =
+            if (message.role == "user") Alignment.CenterEnd else Alignment.CenterStart
 
-        Box(modifier = Modifier.padding(vertical = 6.dp).fillMaxWidth(), contentAlignment = boxArrangement) {
+        Box(
+            modifier = Modifier
+                .padding(vertical = 6.dp)
+                .fillMaxWidth(),
+            contentAlignment = boxArrangement
+        ) {
             Row(
                 verticalAlignment = Alignment.Bottom,
             ) {
@@ -117,7 +121,13 @@ fun MessageBox(message: ChatMessage) {
                     modifier = Modifier
                         .widthIn(max = 300.dp)
                         .aspectRatio(3f / 4f)
-                        .clip(RoundedCornerShape(topEnd = 15.dp, topStart = 15.dp, bottomStart = 15.dp))
+                        .clip(
+                            RoundedCornerShape(
+                                topEnd = 15.dp,
+                                topStart = 15.dp,
+                                bottomStart = 15.dp
+                            )
+                        )
                         .padding(end = 8.dp),
 
                     contentScale = ContentScale.Fit

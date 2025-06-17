@@ -25,19 +25,15 @@ import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.Button
 import androidx.compose.ui.platform.LocalContext
-//import com.github.callmeqan.jarviscomposed.ui.screens.SettingsActivity
-
-
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatAppBar(statusTxt: String,
-               settingBtnOnClick: () -> Unit,
-               bluetoothBtnOnClick: () -> Unit = {},
-               showBluetoothConfig: Boolean = false) {
-    // Lấy Context
-    val context = LocalContext.current
+fun ChatAppBar(
+    statusTxt: String,
+    settingBtnOnClick: () -> Unit,
+    bluetoothBtnOnClick: () -> Unit = {},
+    showBluetoothConfig: Boolean = false
+) {
     CenterAlignedTopAppBar(
         title = {
             Column(
@@ -64,8 +60,7 @@ fun ChatAppBar(statusTxt: String,
                         ),
                         modifier = Modifier.clickable { bluetoothBtnOnClick() }
                     )
-                }
-                else {
+                } else {
                     Text(
                         text = statusTxt,
                         style = TextStyle(
@@ -90,7 +85,7 @@ fun ChatAppBar(statusTxt: String,
 
         actions = {
             IconButton(onClick = {
-                // Gọi callback (nếu có) rồi mở SettingsActivity
+                // Get callback (if yes) rồi mở SettingsActivity
                 settingBtnOnClick()
 //                context.startActivity(Intent(context, SettingsActivity::class.java))
             }) {

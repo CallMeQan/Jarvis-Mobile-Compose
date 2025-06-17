@@ -30,20 +30,20 @@ fun LlmModeDropUp(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val options = listOf(
-        "vanilla" to "chatbot/vanilla",
-        "func call" to "chatbot/function_call_chatbot",
-        "bluetooth" to "chatbot/bluetooth_processor"
+        "Send Message" to "chatbot/vanilla",
+        "Ask to do" to "chatbot/function_call_chatbot",
+        "Control" to "chatbot/bluetooth_processor"
     )
     val initial = options.find { it.second == viewModel.apiMode } ?: options.first()
     var selected by remember(viewModel.apiMode) { mutableStateOf(initial) }
-    val buttonWidth = remember { mutableStateOf(0) }
+    val buttonWidth = remember { mutableIntStateOf(0) }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .wrapContentSize(Alignment.BottomStart)
             .onGloballyPositioned { coords ->
-                buttonWidth.value = coords.size.width
+                buttonWidth.intValue = coords.size.width
             }
     ) {
         Button(onClick = { expanded = !expanded }) {
@@ -54,7 +54,7 @@ fun LlmModeDropUp(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier
-                .width(with(LocalDensity.current) { buttonWidth.value.toDp() })
+                .width(with(LocalDensity.current) { buttonWidth.intValue.toDp() })
                 .align(Alignment.TopStart),
             offset = DpOffset(x = 0.dp, y = 0.dp)
         ) {

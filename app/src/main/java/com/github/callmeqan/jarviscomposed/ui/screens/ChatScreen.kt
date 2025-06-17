@@ -70,7 +70,6 @@ import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import java.nio.ByteBuffer
-import java.util.concurrent.Executor
 import kotlin.math.round
 
 private const val TAG_NAME = "ChatScreen"
@@ -88,7 +87,7 @@ fun ChatScreen(
     var apiChatbot = viewModel.apiMode
     val stateDevice = viewModel.device
 
-    // Snackbar
+    // Snack bar
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current // Like `this` keyword in normal java class
@@ -139,9 +138,9 @@ fun ChatScreen(
     }
 
     LaunchedEffect(Unit) {
-        val notGranted = permissions.filter {
-            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
-        }
+//        val notGranted = permissions.filter {
+//            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+//        }
         if (stateURL == "") {
             // Navigate to setting if stateURL is blank
             onNavigate()
@@ -156,14 +155,14 @@ fun ChatScreen(
     }
 
 
-
     // Camera setup
     val lifecycleOwner = LocalLifecycleOwner.current
     val executor = remember { ContextCompat.getMainExecutor(context) }
 
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-            != PackageManager.PERMISSION_GRANTED) {
+            != PackageManager.PERMISSION_GRANTED
+        ) {
             permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA))
         }
     }
@@ -210,6 +209,7 @@ fun ChatScreen(
         val matrix = Matrix().apply { postRotate(degrees) }
         return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
     }
+
     @Composable
     fun CameraCaptureOnce(onBitmapCaptured: (Bitmap) -> Unit) {
         val imageCapture = remember { ImageCapture.Builder().build() }
@@ -253,7 +253,8 @@ fun ChatScreen(
     }
 
     // CNN model
-    val tfliteModelName = "model_15kb_13e-2ms_dataset_v3.tflite" //should be in assets folder model_17kb
+    val tfliteModelName =
+        "model_15kb_13e-2ms_dataset_v3.tflite" //should be in assets folder model_17kb
     val numClasses = 1
     val interpreter = Interpreter(
         FileUtil.loadMappedFile(context, tfliteModelName),
@@ -274,14 +275,16 @@ fun ChatScreen(
         val buffer = processedImage.buffer
         return buffer
     }
+
     fun loadBitmapFromAssets(context: Context, fileName: String): Bitmap {
         // Mainly for testing purposes; fileName could
         // the name (e.g., "bright.png") of image in
         // app/src/main/assets/images directory.
         val assetManager = context.assets
-        val inputStream = assetManager.open("test_images/" + fileName)
+        val inputStream = assetManager.open("test_images/$fileName")
         return BitmapFactory.decodeStream(inputStream)
     }
+
     fun runModel(context: Context, bitmap: Bitmap): Int {
         /* Sample use:
         val bitmap = loadBitmapFromAssets(context, input)
@@ -306,8 +309,7 @@ fun ChatScreen(
             val status: Int
             if (output[0][0] > 0.6) {
                 status = 1
-            }
-            else {
+            } else {
                 status = 0
             }
 
@@ -322,9 +324,8 @@ fun ChatScreen(
             )
             // If dark return 1, bright return 0
             return status
-        }
-        catch (e: Exception) {
-            scope.launch{
+        } catch (_: Exception) {
+            scope.launch {
                 snackbarHostState.showSnackbar(
                     message = "Cannot inference model!",
                     actionLabel = "",
@@ -335,6 +336,7 @@ fun ChatScreen(
             return -1
         }
     }
+
     fun onResultCNN(result: Int, severMsg: String = "") {
         if (result == 1) {
             messages.add(
@@ -343,19 +345,17 @@ fun ChatScreen(
                     role = "assistant"
                 )
             )
-        }
-        else if (result == 0) {
+        } else if (result == 0) {
             messages.add(
                 ChatMessage(
                     message = "The place seems to be bright! Would you want to turn off the light?",
                     role = "assistant"
                 )
             )
-        }
-        else {
+        } else {
             messages.add(
                 ChatMessage(
-                    message = "There are some errors: " + severMsg,
+                    message = "There are some errors: $severMsg",
                     role = "assistant"
                 )
             )
@@ -365,7 +365,10 @@ fun ChatScreen(
     // Request permissions if do not have yet
     fun requestPermissions() {
         val notGranted = permissions.filter { permission ->
-            ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(
+                context,
+                permission
+            ) != PackageManager.PERMISSION_GRANTED
         }
 
         if (notGranted.isNotEmpty()) {
@@ -405,9 +408,8 @@ fun ChatScreen(
 
                 // At last we are building our retrofit builder.
                 .build()
-        }
-        catch (e: Exception) {
-            scope.launch{
+        } catch (_: Exception) {
+            scope.launch {
                 snackbarHostState.showSnackbar(
                     message = "Invalid URL!",
                     actionLabel = "",
@@ -427,16 +429,14 @@ fun ChatScreen(
         val call: Call<ChatMessage?>?
         if (api == "chatbot/bluetooth_processor") {
             call = retrofitAPI.sendToCommandProcessor(chatMessage)
-        }
-        else if (api == "chatbot/function_call_chatbot") {
+        } else if (api == "chatbot/function_call_chatbot") {
             call = retrofitAPI.sendToFunctionCallChatbot(chatMessage)
-        }
-        else {
+        } else {
             // (api == "chatbot/vanilla")
             call = retrofitAPI.sendToVanillaChatbot(chatMessage)
         }
 
-        scope.launch{
+        scope.launch {
             snackbarHostState.showSnackbar(
                 message = "Message has being sent to server",
                 actionLabel = "",
@@ -448,7 +448,7 @@ fun ChatScreen(
         call!!.enqueue(object : Callback<ChatMessage?> {
             override fun onResponse(call: Call<ChatMessage?>, response: Response<ChatMessage?>) {
                 // This method is called when we get response from our api.
-                scope.launch{
+                scope.launch {
                     snackbarHostState.showSnackbar(
                         message = "Message sent to API server",
                         actionLabel = "",
@@ -460,8 +460,9 @@ fun ChatScreen(
                 val responseBody: ChatMessage? = response.body()
 
                 // On below line we are getting our data from modal class and adding it to our string.
-                if (response.isSuccessful){
-                    val responseString = "Response Code : " + "201" + "\n" + "message : " +responseBody!!.message + "\n" + "role : " + responseBody!!.role
+                if (response.isSuccessful) {
+                    val responseString =
+                        "Response Code : " + "201" + "\n" + "message : " + responseBody!!.message + "\n" + "role : " + responseBody.role
                     // When logic, like if but funner
                     when (api) {
                         "chatbot/vanilla" -> {
@@ -472,6 +473,7 @@ fun ChatScreen(
                                 )
                             )
                         }
+
                         "chatbot/function_call_chatbot" -> {
                             messages.add(
                                 ChatMessage(
@@ -480,6 +482,7 @@ fun ChatScreen(
                                 )
                             )
                         }
+
                         "chatbot/bluetooth_processor" -> {
                             // Add command of Bluetooth processor
                             messages.add(
@@ -489,6 +492,7 @@ fun ChatScreen(
                                 )
                             )
                         }
+
                         else -> {
                             // Add command of Bluetooth processor
                             messages.add(
@@ -503,15 +507,14 @@ fun ChatScreen(
 
                     // Below line we are setting our string to our text view.
                     // This method is called when we get response from our api.
-                    scope.launch{
+                    scope.launch {
                         snackbarHostState.showSnackbar(
                             message = responseString,
                             actionLabel = "",
                             duration = SnackbarDuration.Short
                         )
                     }
-                }
-                else {
+                } else {
                     scope.launch {
                         snackbarHostState.showSnackbar(
                             message = "Null response from Server",
@@ -525,7 +528,7 @@ fun ChatScreen(
             override fun onFailure(call: Call<ChatMessage?>, t: Throwable) {
 
                 // Setting text to our text view when we get error response from API.
-                scope.launch{
+                scope.launch {
                     snackbarHostState.showSnackbar(
                         message = "Error found : " + t.message,
                         actionLabel = "",
@@ -616,7 +619,10 @@ fun ChatScreen(
     fun bluetoothBtnOnClick() {
         // Helper function to check if all permissions are granted
         val hasRequiredPermissions = permissions.all { permission ->
-            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(
+                context,
+                permission
+            ) == PackageManager.PERMISSION_GRANTED
         }
 
         if (hasRequiredPermissions) {
@@ -697,7 +703,7 @@ fun ChatScreen(
                 }
             }
 
-            if (capturing){
+            if (capturing) {
                 Column {
                     CameraCaptureOnce { bmp ->
                         // Use captured bitmap
