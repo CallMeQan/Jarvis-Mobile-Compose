@@ -3,6 +3,7 @@ package com.github.callmeqan.jarviscomposed.utils
 import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.graphics.Bitmap
+import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.ViewModel
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.SnapshotApplyResult
@@ -14,6 +15,11 @@ class SharedViewModel() : ViewModel() {
     // URL string (without / at the end)
     private val _url = mutableStateOf("")
     val url: String get() = _url.value
+
+    // Api mode for chatbot
+    // See SharedViewModel.updateApi() for more info
+    private val _apiMode = mutableStateOf("chatbot/vanilla")
+    val apiMode: String get() = _apiMode.value
 
     // Chat history list that Compose can observe
     private var _chatHistory = SnapshotStateList<ChatMessage>()
@@ -35,6 +41,17 @@ class SharedViewModel() : ViewModel() {
     // Updating URL functions
     fun updateUrl(newUrl: String) {
         _url.value = newUrl
+    }
+
+    // Updating api mode
+    fun updateApi(newApi: String) {
+        // Could be of these three
+        // [
+        //      chatbot/vanilla,
+        //      chatbot/function_call_chatbot,
+        //      chatbot/bluetooth_processor
+        // ]
+        _apiMode.value = newApi
     }
 
     // Bluetooth functions
