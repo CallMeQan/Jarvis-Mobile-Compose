@@ -30,9 +30,9 @@ fun LlmModeDropUp(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val options = listOf(
-        "Send Message" to "chatbot/vanilla",
-        "Ask to do" to "chatbot/function_call_chatbot",
-        "Control" to "chatbot/bluetooth_processor"
+        "Casual chat" to "chatbot/vanilla",
+        "Searching bot" to "chatbot/function_call_chatbot",
+        "Bluetooth command" to "chatbot/bluetooth_processor"
     )
     val initial = options.find { it.second == viewModel.apiMode } ?: options.first()
     var selected by remember(viewModel.apiMode) { mutableStateOf(initial) }
