@@ -11,33 +11,30 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.github.callmeqan.jarviscomposed.viewmodels.AuthMode
-import com.github.callmeqan.jarviscomposed.viewmodels.LoginViewModel
+import com.github.callmeqan.jarviscomposed.utils.AuthMode
+import com.github.callmeqan.jarviscomposed.utils.SharedViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     navController: NavController,
-    loginViewModel: LoginViewModel = viewModel()
+    viewModel: SharedViewModel
 ) {
-    val uiState by loginViewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     // Check login status when the screen is first composed
     LaunchedEffect(Unit) {
-        loginViewModel.checkLoginStatus()
+        viewModel.checkLoginStatus()
     }
 
     // Navigate away if login becomes successful
     LaunchedEffect(uiState.loginSuccess) {
         if (uiState.loginSuccess) {
-            // Navigate to your main app screen after successful login
-            // Example: navController.navigate("home_screen") { popUpTo("login_screen") { inclusive = true } }
-            navController.popBackStack() // Or navigate to a specific destination
+            navController.popBackStack()
         }
     }
 
@@ -54,11 +51,10 @@ fun LoginScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
             if (uiState.authMode == AuthMode.REGISTER) {
                 OutlinedTextField(
                     value = uiState.username,
-                    onValueChange = { loginViewModel.onUsernameChange(it) },
+                    onValueChange = { viewModel.onUsernameChange(it) },
                     label = { Text("Username") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -67,7 +63,7 @@ fun LoginScreen(
 
                 OutlinedTextField(
                     value = uiState.name,
-                    onValueChange = { loginViewModel.onNameChange(it) },
+                    onValueChange = { viewModel.onNameChange(it) },
                     label = { Text("Name") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -77,7 +73,7 @@ fun LoginScreen(
 
             OutlinedTextField(
                 value = uiState.email,
-                onValueChange = { loginViewModel.onEmailChange(it) },
+                onValueChange = { viewModel.onEmailChange(it) },
                 label = { Text("Email") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -87,7 +83,7 @@ fun LoginScreen(
 
             OutlinedTextField(
                 value = uiState.password,
-                onValueChange = { loginViewModel.onPasswordChange(it) },
+                onValueChange = { viewModel.onPasswordChange(it) },
                 label = { Text("Password") },
                 modifier = Modifier.fillMaxWidth(),
                 visualTransformation = PasswordVisualTransformation(),
@@ -99,7 +95,7 @@ fun LoginScreen(
             if (uiState.authMode == AuthMode.REGISTER) {
                 OutlinedTextField(
                     value = uiState.retypePassword,
-                    onValueChange = { loginViewModel.onRetypePasswordChange(it) },
+                    onValueChange = { viewModel.onRetypePasswordChange(it) },
                     label = { Text("Retype Password") },
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
@@ -109,19 +105,18 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-
             if (uiState.isLoading) {
                 CircularProgressIndicator()
             } else {
                 Button(
-                    onClick = { loginViewModel.submit() },
+                    onClick = { viewModel.submit() },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (uiState.authMode == AuthMode.LOGIN) "Login" else "Register")
                 }
             }
 
-            TextButton(onClick = { loginViewModel.toggleAuthMode() }) {
+            TextButton(onClick = { viewModel.toggleAuthMode() }) {
                 Text(
                     if (uiState.authMode == AuthMode.LOGIN) "Don't have an account? Register"
                     else "Already have an account? Login"

@@ -34,7 +34,8 @@ data class AuthScreenState(
     val loginSuccess: Boolean = false
 )
 
-// Change to AndroidViewModel and add constructor parameter
+// This file is now obsolete. All login/register logic has been merged into SharedViewModel.
+// Please use SharedViewModel for all authentication-related state and actions.
 class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val _url = mutableStateOf("")
     val url: String get() = _url.value
