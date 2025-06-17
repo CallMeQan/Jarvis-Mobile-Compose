@@ -16,4 +16,7 @@ Gemma-3 as AI in backend server
 
 ### Hồ Nguyễn Phú
 
-- Implement all AI feature?
+- Retrofit connection
+- Navigation
+- Viewmodel
+- CNN model
