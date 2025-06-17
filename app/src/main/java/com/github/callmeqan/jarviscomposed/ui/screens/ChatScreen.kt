@@ -54,6 +54,7 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -338,6 +339,8 @@ fun ChatScreen(
     }
 
     fun onResultCNN(result: Int, severMsg: String = "") {
+        apiChatbot = "chatbot/bluetooth_processor"
+        viewModel.updateApi(apiChatbot)
         if (result == 1) {
             messages.add(
                 ChatMessage(
@@ -382,6 +385,52 @@ fun ChatScreen(
         Log.d(TAG_NAME, "All permissions:")
         for (permission in permissions.toList()) {
             Log.d(TAG_NAME, "   - $permission")
+        }
+    }
+
+    // Connect to device (in coroutine)
+    suspend fun connectToDevice(device: BluetoothDevice): BluetoothSocket? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") // SPP UUID
+                val tmpSocket = device.createRfcommSocketToServiceRecord(uuid)
+                tmpSocket.connect()
+                tmpSocket // Connected!
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        }
+    }
+
+    // Send message to ESP32
+    suspend fun sendCommand2ESP32(input: String) {
+        // When connected, send message to device
+        val commands: List<String> = input.split(";")
+            .filter { it.isNotBlank() }  // Removes the last empty string if any
+
+        for (command in commands) {
+            // Add command of Bluetooth processor
+            messages.add(
+                ChatMessage(
+                    message = "Your command: $command",
+                    role = "assistant"
+                )
+            )
+
+            // If connected then send the message
+            if (socket != null && socket!!.isConnected) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        socket!!.outputStream.write(command.toByteArray())
+                        socket!!.outputStream.flush()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+
+            delay(1000L) // pause for 3 seconds
         }
     }
 
@@ -484,13 +533,10 @@ fun ChatScreen(
                         }
 
                         "chatbot/bluetooth_processor" -> {
-                            // Add command of Bluetooth processor
-                            messages.add(
-                                ChatMessage(
-                                    message = responseBody.message,
-                                    role = "assistant"
-                                )
-                            )
+                            // Messages' addition will be done in the function
+                            scope.launch {
+                                sendCommand2ESP32(responseBody.message)
+                            }
                         }
 
                         else -> {
@@ -539,21 +585,6 @@ fun ChatScreen(
         })
     }
 
-    // Connect to device (in coroutine)
-    suspend fun connectToDevice(device: BluetoothDevice): BluetoothSocket? {
-        return withContext(Dispatchers.IO) {
-            try {
-                val uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") // SPP UUID
-                val tmpSocket = device.createRfcommSocketToServiceRecord(uuid)
-                tmpSocket.connect()
-                tmpSocket // Connected!
-            } catch (e: Exception) {
-                e.printStackTrace()
-                null
-            }
-        }
-    }
-
     fun sendBtnOnClick() {
         val inputCopy = input
         if (inputCopy.isNotBlank()) {
@@ -571,17 +602,6 @@ fun ChatScreen(
                 role = "user",
                 api = apiChatbot
             )
-            // When connected, send message to device
-            if (socket != null && socket!!.isConnected) {
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        socket!!.outputStream.write(inputCopy.toByteArray())
-                        socket!!.outputStream.flush()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            }
             input = ""
         }
     }
@@ -600,6 +620,11 @@ fun ChatScreen(
                         message = recognizedText,
                         role = "user"
                     )
+                )
+                sendMessageToServer(
+                    message = recognizedText,
+                    role = "user",
+                    api = apiChatbot
                 )
             }
         }
@@ -724,7 +749,11 @@ fun ChatScreen(
             MessageInputField(
                 value = input,
                 onValueChange = { input = it },
-                sendBtnOnClick = ::sendBtnOnClick,
+                sendBtnOnClick = {
+                    scope.launch {
+                        sendBtnOnClick()
+                    }
+                },
                 micBtnOnClick = ::micBtnOnClick
             )
         }
