@@ -28,7 +28,7 @@ fun LoginScreen(
 
     // Check login status when the screen is first composed
     LaunchedEffect(Unit) {
-        viewModel.checkLoginStatus()
+        viewModel.checkLoginStatus(context)
     }
 
     // Navigate away if login becomes successful
@@ -109,7 +109,7 @@ fun LoginScreen(
                 CircularProgressIndicator()
             } else {
                 Button(
-                    onClick = { viewModel.submit() },
+                    onClick = { viewModel.submit(context) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (uiState.authMode == AuthMode.LOGIN) "Login" else "Register")
@@ -140,7 +140,7 @@ fun LoginScreen(
                         singleLine = true
                     )
                     Button(
-                        onClick = { viewModel.forgotPassword(forgotEmail) },
+                        onClick = { viewModel.forgotPassword(context, forgotEmail) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Send reset link")
@@ -183,7 +183,7 @@ fun LoginScreen(
                     singleLine = true
                 )
                 Button(
-                    onClick = { viewModel.recoverPassword(token, newPassword, confirmPassword) },
+                    onClick = { viewModel.recoverPassword(context, token, newPassword, confirmPassword) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Change Password")
@@ -193,7 +193,7 @@ fun LoginScreen(
             // Logout button (if logged in)
             if (uiState.loginSuccess) {
                 Button(
-                    onClick = { viewModel.logout() },
+                    onClick = { viewModel.logout(context) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Logout")

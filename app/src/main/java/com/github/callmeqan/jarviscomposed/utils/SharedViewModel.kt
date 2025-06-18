@@ -119,14 +119,14 @@ class SharedViewModel() : ViewModel() {
         val newMode = if (_uiState.value.authMode == AuthMode.LOGIN) AuthMode.REGISTER else AuthMode.LOGIN
         _uiState.value = AuthScreenState(authMode = newMode)
     }
-    fun submit() {
+    fun submit(context: Context) {
         if (_uiState.value.authMode == AuthMode.LOGIN) {
-            loginUser()
+            loginUser(context)
         } else {
-            registerUser()
+            registerUser(context)
         }
     }
-    private fun loginUser() {
+    private fun loginUser(context: Context) {
         val okHttpClient = OkHttpClient.Builder()
             .connectTimeout(60, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
@@ -156,8 +156,8 @@ class SharedViewModel() : ViewModel() {
                 if (response.isSuccessful && response.body() != null) {
                     val loginResponse = response.body()!!
                     if (loginResponse.access_token != null && loginResponse.refresh_token != null) {
-                        UUid.saveAuthTokens(getApplication(), loginResponse.access_token, loginResponse.refresh_token)
-                        UUid.saveUserEmail(getApplication(), state.email)
+                        UUid.saveAuthTokens(context, loginResponse.access_token, loginResponse.refresh_token)
+                        UUid.saveUserEmail(context, state.email)
                         _uiState.value = _uiState.value.copy(isLoading = false, loginSuccess = true)
                     } else {
                         _uiState.value = state.copy(isLoading = false, errorMessage = loginResponse.msg ?: "Login failed: No token received")
@@ -171,7 +171,7 @@ class SharedViewModel() : ViewModel() {
             }
         }
     }
-    private fun registerUser() {
+    private fun registerUser(context: Context) {
         val okHttpClient = OkHttpClient.Builder()
             .connectTimeout(60, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
@@ -224,26 +224,22 @@ class SharedViewModel() : ViewModel() {
             }
         }
     }
-    fun checkLoginStatus() {
+    fun checkLoginStatus(context: Context) {
         viewModelScope.launch {
-            UUid.isLoggedInFlow(getApplication()).collect { isLoggedIn =>
+            UUid.isLoggedInFlow(context).collect { isLoggedIn =>
                 if (isLoggedIn) {
                     _uiState.value = _uiState.value.copy(loginSuccess = true)
                 }
             }
         }
     }
-
-    // Logout function
-    fun logout() {
+    fun logout(context: Context) {
         viewModelScope.launch {
-            UUid.clearSession(getApplication())
+            UUid.clearSession(context)
             _uiState.value = AuthScreenState() // Reset state
         }
     }
-
-    // Forgot password function
-    fun forgotPassword(email: String) {
+    fun forgotPassword(context: Context, email: String) {
         val okHttpClient = OkHttpClient.Builder()
             .connectTimeout(60, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
@@ -275,9 +271,7 @@ class SharedViewModel() : ViewModel() {
             }
         }
     }
-
-    // Recover password function
-    fun recoverPassword(token: String, newPassword: String, confirmPassword: String) {
+    fun recoverPassword(context: Context, token: String, newPassword: String, confirmPassword: String) {
         val okHttpClient = OkHttpClient.Builder()
             .connectTimeout(60, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
