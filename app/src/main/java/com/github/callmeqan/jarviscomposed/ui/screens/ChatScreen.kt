@@ -663,6 +663,17 @@ fun ChatScreen(
         onNavigate()
     }
 
+    val isLoggedIn = viewModel.uiState.collectAsState().value.loginSuccess
+    var showLoginScreen by remember { mutableStateOf(false) }
+
+    fun loginLogoutBtnOnClick() {
+        if (isLoggedIn) {
+            viewModel.logout()
+        } else {
+            showLoginScreen = true
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         modifier = Modifier
@@ -689,7 +700,9 @@ fun ChatScreen(
                 },
                 settingBtnOnClick = { settingBtnOnClick() },
                 bluetoothBtnOnClick = { bluetoothBtnOnClick() },
-                showBluetoothConfig = true
+                showBluetoothConfig = true,
+                isLoggedIn = isLoggedIn,
+                loginLogoutBtnOnClick = { loginLogoutBtnOnClick() }
             )
         },
         containerColor = Color.Transparent,
@@ -756,6 +769,42 @@ fun ChatScreen(
                 },
                 micBtnOnClick = ::micBtnOnClick
             )
+        }
+
+        // Bluetooth device picker dialog
+        if (showBluetoothDialog) {
+            BluetoothDevicePickerDialog(
+                devices = pairedDevices,
+                onDismiss = { showBluetoothDialog = false },
+                onDeviceSelected = { device ->
+                    showBluetoothDialog = false
+                    // Start connecting, update state
+                    isConnecting = true
+                    connectionError = null
+                    connectedDevice = device
+
+                    // Update view model
+                    viewModel.connectTo(device)
+
+                    // Try to connect in background
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            val result = connectToDevice(device)
+                            socket = result
+                            isConnecting = false
+                            connectionError = if (result == null) "Failed to connect" else null
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            )
+        }
+
+        if (showLoginScreen) {
+            // Use your navigation logic here, or show LoginScreen directly if using Compose navigation
+            onNavigate()
+            showLoginScreen = false
         }
     }
 

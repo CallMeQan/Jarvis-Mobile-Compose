@@ -123,6 +123,83 @@ fun LoginScreen(
                 )
             }
 
+            // Forgot password button (only in login mode)
+            if (uiState.authMode == AuthMode.LOGIN) {
+                var showForgot by remember { mutableStateOf(false) }
+                if (!showForgot) {
+                    TextButton(onClick = { showForgot = true }) {
+                        Text("Forgot password?")
+                    }
+                } else {
+                    var forgotEmail by remember { mutableStateOf("") }
+                    OutlinedTextField(
+                        value = forgotEmail,
+                        onValueChange = { forgotEmail = it },
+                        label = { Text("Enter your email") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Button(
+                        onClick = { viewModel.forgotPassword(forgotEmail) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Send reset link")
+                    }
+                }
+            }
+
+            // Change password section (show if user has a reset token)
+            var showChangePassword by remember { mutableStateOf(false) }
+            TextButton(onClick = { showChangePassword = !showChangePassword }) {
+                Text("Change password with token")
+            }
+            if (showChangePassword) {
+                var token by remember { mutableStateOf("") }
+                var newPassword by remember { mutableStateOf("") }
+                var confirmPassword by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = { token = it },
+                    label = { Text("Reset Token") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = newPassword,
+                    onValueChange = { newPassword = it },
+                    label = { Text("New Password") },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    label = { Text("Confirm Password") },
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    singleLine = true
+                )
+                Button(
+                    onClick = { viewModel.recoverPassword(token, newPassword, confirmPassword) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Change Password")
+                }
+            }
+
+            // Logout button (if logged in)
+            if (uiState.loginSuccess) {
+                Button(
+                    onClick = { viewModel.logout() },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Logout")
+                }
+            }
+
             uiState.errorMessage?.let {
                 Text(
                     text = it,

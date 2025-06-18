@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Login
+import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,10 +34,14 @@ import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatAppBar(statusTxt: String,
-               settingBtnOnClick: () -> Unit,
-               bluetoothBtnOnClick: () -> Unit = {},
-               showBluetoothConfig: Boolean = false) {
+fun ChatAppBar(
+    statusTxt: String,
+    settingBtnOnClick: () -> Unit,
+    bluetoothBtnOnClick: () -> Unit = {},
+    showBluetoothConfig: Boolean = false,
+    isLoggedIn: Boolean = false,
+    loginLogoutBtnOnClick: () -> Unit = {},
+) {
     // Lấy Context
     val context = LocalContext.current
     CenterAlignedTopAppBar(
@@ -89,6 +95,13 @@ fun ChatAppBar(statusTxt: String,
         ),
 
         actions = {
+            IconButton(onClick = { loginLogoutBtnOnClick() }) {
+                if (isLoggedIn) {
+                    Icon(Icons.Outlined.Logout, contentDescription = "Logout")
+                } else {
+                    Icon(Icons.Outlined.Login, contentDescription = "Login")
+                }
+            }
             IconButton(onClick = {
                 // Gọi callback (nếu có) rồi mở SettingsActivity
                 settingBtnOnClick()
