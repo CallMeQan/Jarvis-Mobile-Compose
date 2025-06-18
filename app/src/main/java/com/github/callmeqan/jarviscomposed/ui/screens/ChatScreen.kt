@@ -668,7 +668,7 @@ fun ChatScreen(
 
     fun loginLogoutBtnOnClick() {
         if (isLoggedIn) {
-            viewModel.logout()
+            viewModel.logout(context)
         } else {
             showLoginScreen = true
         }

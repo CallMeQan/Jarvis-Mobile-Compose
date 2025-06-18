@@ -262,7 +262,8 @@ class SharedViewModel() : ViewModel() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, registrationMessage = null)
             try {
-                val response = retrofitAPI.forgotPassword(Uid(email = email))
+                // Only email is required for forgot password, fill other fields with blank/empty
+                val response = retrofitAPI.forgotPassword(Uid(email = email, password = ""))
                 if (response != null) {
                     _uiState.value = _uiState.value.copy(isLoading = false, registrationMessage = "Reset link sent to your email (mock)")
                 } else {

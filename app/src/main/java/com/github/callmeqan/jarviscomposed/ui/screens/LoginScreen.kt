@@ -12,7 +12,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.github.callmeqan.jarviscomposed.utils.AuthMode
 import com.github.callmeqan.jarviscomposed.utils.SharedViewModel
 import kotlinx.coroutines.launch
 
@@ -40,7 +39,7 @@ fun LoginScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(if (uiState.authMode == AuthMode.LOGIN) "Login" else "Register") })
+            TopAppBar(title = { Text(if (uiState.authMode == SharedViewModel.AuthMode.LOGIN) "Login" else "Register") })
         }
     ) { paddingValues ->
         Column(
@@ -51,7 +50,7 @@ fun LoginScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (uiState.authMode == AuthMode.REGISTER) {
+            if (uiState.authMode == SharedViewModel.AuthMode.REGISTER) {
                 OutlinedTextField(
                     value = uiState.username,
                     onValueChange = { viewModel.onUsernameChange(it) },
@@ -92,7 +91,7 @@ fun LoginScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            if (uiState.authMode == AuthMode.REGISTER) {
+            if (uiState.authMode == SharedViewModel.AuthMode.REGISTER) {
                 OutlinedTextField(
                     value = uiState.retypePassword,
                     onValueChange = { viewModel.onRetypePasswordChange(it) },
@@ -112,19 +111,19 @@ fun LoginScreen(
                     onClick = { viewModel.submit(context) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (uiState.authMode == AuthMode.LOGIN) "Login" else "Register")
+                    Text(if (uiState.authMode == SharedViewModel.AuthMode.LOGIN) "Login" else "Register")
                 }
             }
 
             TextButton(onClick = { viewModel.toggleAuthMode() }) {
                 Text(
-                    if (uiState.authMode == AuthMode.LOGIN) "Don't have an account? Register"
+                    if (uiState.authMode == SharedViewModel.AuthMode.LOGIN) "Don't have an account? Register"
                     else "Already have an account? Login"
                 )
             }
 
             // Forgot password button (only in login mode)
-            if (uiState.authMode == AuthMode.LOGIN) {
+            if (uiState.authMode == SharedViewModel.AuthMode.LOGIN) {
                 var showForgot by remember { mutableStateOf(false) }
                 if (!showForgot) {
                     TextButton(onClick = { showForgot = true }) {
