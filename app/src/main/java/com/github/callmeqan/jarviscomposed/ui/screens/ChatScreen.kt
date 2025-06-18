@@ -107,7 +107,6 @@ fun ChatScreen(
             Manifest.permission.INTERNET,
             Manifest.permission.CAMERA,
             Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE,
         )
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -126,7 +125,7 @@ fun ChatScreen(
 
     // For showing Bluetooth picker dialog
     var showBluetoothDialog by remember { mutableStateOf(false) }
-    var pairedDevices = remember { mutableStateListOf<BluetoothDevice>() }
+    var pairedDevices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
 
     val topBarState = rememberTopAppBarState()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
