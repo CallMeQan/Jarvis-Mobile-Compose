@@ -226,9 +226,11 @@ class SharedViewModel() : ViewModel() {
     }
     fun checkLoginStatus(context: Context) {
         viewModelScope.launch {
-            UUid.isLoggedInFlow(context).collect { isLoggedIn =>
+            UUid.isLoggedInFlow(context).collect { isLoggedIn ->
                 if (isLoggedIn) {
                     _uiState.value = _uiState.value.copy(loginSuccess = true)
+                } else {
+                    _uiState.value = _uiState.value.copy(loginSuccess = false)
                 }
             }
         }
