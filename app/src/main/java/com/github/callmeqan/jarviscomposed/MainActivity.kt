@@ -55,7 +55,8 @@ fun NavApp(bluetoothAdapter: BluetoothAdapter) {
                     viewModel = viewModel,
                     onNavigate = {
                         navController.navigate("setting")
-                    }
+                    },
+                    navController = navController // Pass navController to ChatScreen
                 )
             }
             composable("setting") { entry ->

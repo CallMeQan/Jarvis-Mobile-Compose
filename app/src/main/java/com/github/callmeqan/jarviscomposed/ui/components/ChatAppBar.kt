@@ -45,6 +45,15 @@ fun ChatAppBar(
     // Lấy Context
     val context = LocalContext.current
     CenterAlignedTopAppBar(
+        navigationIcon = {
+            IconButton(onClick = { loginLogoutBtnOnClick() }) {
+                if (isLoggedIn) {
+                    Icon(Icons.Outlined.Logout, contentDescription = "Logout")
+                } else {
+                    Icon(Icons.Outlined.Login, contentDescription = "Login")
+                }
+            }
+        },
         title = {
             Column(
                 verticalArrangement = Arrangement.Center,
@@ -95,15 +104,7 @@ fun ChatAppBar(
         ),
 
         actions = {
-            IconButton(onClick = { loginLogoutBtnOnClick() }) {
-                if (isLoggedIn) {
-                    Icon(Icons.Outlined.Logout, contentDescription = "Logout")
-                } else {
-                    Icon(Icons.Outlined.Login, contentDescription = "Login")
-                }
-            }
             IconButton(onClick = {
-                // Gọi callback (nếu có) rồi mở SettingsActivity
                 settingBtnOnClick()
 //                context.startActivity(Intent(context, SettingsActivity::class.java))
             }) {

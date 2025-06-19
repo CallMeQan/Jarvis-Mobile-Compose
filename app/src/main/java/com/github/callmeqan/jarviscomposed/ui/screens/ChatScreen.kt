@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.navigation.NavController
 import com.github.callmeqan.jarviscomposed.data.ChatMessage
 import com.github.callmeqan.jarviscomposed.ui.components.BluetoothDevicePickerDialog
 import com.github.callmeqan.jarviscomposed.ui.components.CameraCaptureButton
@@ -64,7 +65,8 @@ private const val TAG_NAME = "ChatScreen"
 fun ChatScreen(
     bluetoothAdapter: BluetoothAdapter,
     viewModel: SharedViewModel,
-    onNavigate: () -> Unit
+    onNavigate: () -> Unit,
+    navController: NavController? = null
 ) {
     // Get state from View Model
     val stateURL = viewModel.url
@@ -530,7 +532,8 @@ fun ChatScreen(
         if (isLoggedIn) {
             viewModel.logout(context)
         } else {
-            showLoginScreen = true
+            // Navigate to login screen instead of setting
+            navController?.navigate("login")
         }
     }
 

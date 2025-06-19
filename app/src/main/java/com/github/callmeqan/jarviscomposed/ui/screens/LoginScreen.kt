@@ -12,8 +12,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.github.callmeqan.jarviscomposed.ui.components.ChatAppBar
 import com.github.callmeqan.jarviscomposed.utils.SharedViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,6 +26,7 @@ fun LoginScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Check login status when the screen is first composed
     LaunchedEffect(Unit) {
@@ -37,10 +40,22 @@ fun LoginScreen(
         }
     }
 
+    // Add scrollBehavior for the app bar
+    val topBarState = rememberTopAppBarState()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
+
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
-            TopAppBar(title = { Text(if (uiState.authMode == SharedViewModel.AuthMode.LOGIN) "Login" else "Register") })
-        }
+            ChatAppBar(
+                statusTxt = if (uiState.authMode == SharedViewModel.AuthMode.LOGIN) "Login" else "Sign Up",
+                settingBtnOnClick = {},
+                showBluetoothConfig = false,
+                isLoggedIn = false,
+                loginLogoutBtnOnClick = {},
+            )
+        },
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
     ) { paddingValues ->
         Column(
             modifier = Modifier
