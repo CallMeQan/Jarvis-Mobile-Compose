@@ -215,13 +215,15 @@ fun LoginScreen(
             }
 
             // Show red warning if not connected to a server (url is blank or default)
-            if (viewModel.url.isBlank() || viewModel.url == "http://10.0.2.2:8000/") {
+            val showServerWarning = viewModel.url.isBlank() || viewModel.url == "http://10.0.2.2:8000/"
+            if (showServerWarning) {
                 Text(
                     text = "You must connect to a server in Settings before logging in!",
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 24.dp)
                 )
             }
+            // Allow login/register button to always be enabled, regardless of server connection
 
             // Back to Chat button
             if (true) {

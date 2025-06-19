@@ -124,7 +124,7 @@ fun ChatScreen(
 //        val notGranted = permissions.filter {
 //            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
 //        }
-        if (stateURL == "") {
+        if (stateURL == "" && false) {
             // Navigate to setting if stateURL is blank
             onNavigate()
         }
