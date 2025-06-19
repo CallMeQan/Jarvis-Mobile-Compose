@@ -107,7 +107,6 @@ fun ChatScreen(
             Manifest.permission.INTERNET,
             Manifest.permission.CAMERA,
             Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE,
         )
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -126,7 +125,7 @@ fun ChatScreen(
 
     // For showing Bluetooth picker dialog
     var showBluetoothDialog by remember { mutableStateOf(false) }
-    var pairedDevices = remember { mutableStateListOf<BluetoothDevice>() }
+    var pairedDevices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
 
     val topBarState = rememberTopAppBarState()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
@@ -404,33 +403,25 @@ fun ChatScreen(
     }
 
     // Send message to ESP32
-    suspend fun sendCommand2ESP32(input: String) {
+    fun sendCommand2ESP32(input: String) {
         // When connected, send message to device
-        val commands: List<String> = input.split(";")
-            .filter { it.isNotBlank() }  // Removes the last empty string if any
-
-        for (command in commands) {
-            // Add command of Bluetooth processor
-            messages.add(
-                ChatMessage(
-                    message = "Your command: $command",
-                    role = "assistant"
-                )
+        messages.add(
+            ChatMessage(
+                message = "Your command: $input",
+                role = "assistant"
             )
+        )
 
-            // If connected then send the message
-            if (socket != null && socket!!.isConnected) {
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        socket!!.outputStream.write(command.toByteArray())
-                        socket!!.outputStream.flush()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
+        // If connected then send the message
+        if (socket != null && socket!!.isConnected) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    socket!!.outputStream.write(input.toByteArray())
+                    socket!!.outputStream.flush()
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
-
-            delay(1000L) // pause for 3 seconds
         }
     }
 
@@ -534,9 +525,7 @@ fun ChatScreen(
 
                         "chatbot/bluetooth_processor" -> {
                             // Messages' addition will be done in the function
-                            scope.launch {
-                                sendCommand2ESP32(responseBody.message)
-                            }
+                            sendCommand2ESP32(responseBody.message)
                         }
 
                         else -> {
