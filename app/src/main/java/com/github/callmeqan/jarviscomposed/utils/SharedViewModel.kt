@@ -239,79 +239,55 @@ class SharedViewModel() : ViewModel() {
             }
         }
     }
+    // Call this to refresh JWT access token using refresh token
+    suspend fun refreshTokenIfNeeded(context: Context) {
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
+        val retrofit = Retrofit.Builder()
+            .baseUrl(url + "/")
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
+        val refreshToken = UUid.getRefreshTokenFlow(context).first()
+        if (refreshToken.isNullOrBlank()) return
+        try {
+            val response = retrofitAPI.refreshToken("Bearer $refreshToken")
+            if (response.isSuccessful && response.body() != null) {
+                val loginResponse = response.body()!!
+                if (!loginResponse.access_token.isNullOrBlank()) {
+                    UUid.saveAccessToken(context, loginResponse.access_token)
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    // Call this to log out (removes tokens on client and notifies server)
     fun logout(context: Context) {
         viewModelScope.launch {
+            val okHttpClient = OkHttpClient.Builder()
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .build()
+            val retrofit = Retrofit.Builder()
+                .baseUrl(url + "/")
+                .client(okHttpClient)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+            val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
+            try {
+                retrofitAPI.logout() // JWT logout is stateless, just for API completeness
+            } catch (_: Exception) {}
             UUid.clearSession(context)
             _uiState.value = AuthScreenState() // Reset state
         }
     }
-    fun forgotPassword(context: Context, email: String) {
-        val okHttpClient = OkHttpClient.Builder()
-            .connectTimeout(60, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
-            .build()
-        val retrofit: Retrofit
-        try {
-            retrofit = Retrofit.Builder()
-                .baseUrl(url + "/")
-                .client(okHttpClient)
-                .addConverterFactory(GsonConverterFactory.create())
-                .build()
-        } catch (e: Exception) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Network client setup error: ${e.message}")
-            return
-        }
-        val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, registrationMessage = null)
-            try {
-                // Only email is required for forgot password, fill other fields with blank/empty
-                val response = retrofitAPI.forgotPassword(Uid(email = email, password = ""))
-                if (response != null) {
-                    _uiState.value = _uiState.value.copy(isLoading = false, registrationMessage = "Reset link sent to your email (mock)")
-                } else {
-                    _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Failed to send reset link")
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Forgot password error: ${e.message}")
-            }
-        }
-    }
-    fun recoverPassword(context: Context, token: String, newPassword: String, confirmPassword: String) {
-        val okHttpClient = OkHttpClient.Builder()
-            .connectTimeout(60, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
-            .build()
-        val retrofit: Retrofit
-        try {
-            retrofit = Retrofit.Builder()
-                .baseUrl(url + "/")
-                .client(okHttpClient)
-                .addConverterFactory(GsonConverterFactory.create())
-                .build()
-        } catch (e: Exception) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Network client setup error: ${e.message}")
-            return
-        }
-        val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, registrationMessage = null)
-            try {
-                val response = retrofitAPI.recoverPassword(
-                    com.github.callmeqan.jarviscomposed.data.RecoverToken(token, newPassword, confirmPassword)
-                )
-                if (response != null) {
-                    _uiState.value = _uiState.value.copy(isLoading = false, registrationMessage = "Password updated successfully")
-                } else {
-                    _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Failed to update password")
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Recover password error: ${e.message}")
-            }
-        }
-    }
+    // To use getProfile: Call when you need user info (e.g., for chat log, profile, etc.)
+    // fun getProfile(context: Context) { /* TODO: implement if needed */ }
 
     override fun onCleared() {
         super.onCleared()

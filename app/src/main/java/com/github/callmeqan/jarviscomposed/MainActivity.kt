@@ -69,6 +69,14 @@ fun NavApp(bluetoothAdapter: BluetoothAdapter) {
                 )
             }
         }
+        // Add LoginScreen route
+        composable("login") { entry ->
+            val viewModel = entry.sharedViewModel<SharedViewModel>(navController)
+            com.github.callmeqan.jarviscomposed.screens.LoginScreen(
+                navController = navController,
+                viewModel = viewModel
+            )
+        }
     }
 }
 
