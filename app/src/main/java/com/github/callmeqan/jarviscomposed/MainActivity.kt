@@ -25,6 +25,15 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navigation
 import com.github.callmeqan.jarviscomposed.ui.screens.SettingScreen
 import com.github.callmeqan.jarviscomposed.utils.SharedViewModel
+import com.github.callmeqan.jarviscomposed.data.LoginRequest
+import com.github.callmeqan.jarviscomposed.data.Uid
+import com.github.callmeqan.jarviscomposed.data.LoginResponse
+import com.github.callmeqan.jarviscomposed.data.RegisterResponse
+import com.github.callmeqan.jarviscomposed.data.ProfileResponse
+import com.github.callmeqan.jarviscomposed.data.MessageResponse
+import com.github.callmeqan.jarviscomposed.data.RecoverToken
+import com.github.callmeqan.jarviscomposed.utils.RetrofitAPI
+import com.github.callmeqan.jarviscomposed.utils.UUid
 
 @Composable
 fun NavApp(bluetoothAdapter: BluetoothAdapter) {
@@ -76,6 +85,8 @@ inline fun <reified T : ViewModel> NavBackStackEntry.sharedViewModel(
 
 open class MainActivity : ComponentActivity() {
     private lateinit var bluetoothAdapter: BluetoothAdapter
+    private lateinit var retrofitAPI: RetrofitAPI
+    private lateinit var sharedViewModel: SharedViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -90,12 +101,25 @@ open class MainActivity : ComponentActivity() {
         val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = bluetoothManager.adapter
 
+        // Initialize RetrofitAPI (basic example, you may want to move this to a DI or ViewModel)
+        retrofitAPI = com.github.callmeqan.jarviscomposed.utils.SharedViewModel().let { vm ->
+            val retrofit = retrofit2.Retrofit.Builder()
+                .baseUrl(vm.url.ifEmpty { "https://3238-2405-4802-a458-8e90-f1fd-bf94-f4ae-9db.ngrok-free.app" }) // fallback base URL
+                .addConverterFactory(retrofit2.converter.gson.GsonConverterFactory.create())
+                .build()
+            retrofit.create(RetrofitAPI::class.java)
+        }
+
+        // Initialize SharedViewModel
+        sharedViewModel = SharedViewModel()
+
         setContent {
             JarvisComposedTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = Color(0xFF1C1B1B)
                 ) {
+                    // Pass sharedViewModel to NavApp if you want to use the same instance
                     NavApp(
                         bluetoothAdapter = bluetoothAdapter,
                     )
