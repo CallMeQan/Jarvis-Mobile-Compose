@@ -7,7 +7,6 @@ pluginManagement {
                 includeGroupByRegex("androidx.*")
             }
         }
-        mavenCentral()
         gradlePluginPortal()
     }
 }
@@ -16,6 +15,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+
+        // Fix: Could not resolve all files for configuration
+        maven { url = uri("https://jitpack.io") }  // For GitHub libraries
     }
 }
 

@@ -5,12 +5,23 @@ import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.speech.RecognizerIntent
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,32 +30,48 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.github.callmeqan.jarviscomposed.data.ChatMessage
 import com.github.callmeqan.jarviscomposed.ui.components.BluetoothDevicePickerDialog
+import com.github.callmeqan.jarviscomposed.ui.components.CameraCaptureButton
 import com.github.callmeqan.jarviscomposed.ui.components.ChatAppBar
+import com.github.callmeqan.jarviscomposed.ui.components.LlmModeDropUp
 import com.github.callmeqan.jarviscomposed.ui.components.MessageBox
 import com.github.callmeqan.jarviscomposed.ui.components.MessageInputField
 import com.github.callmeqan.jarviscomposed.utils.RetrofitAPI
+import com.github.callmeqan.jarviscomposed.utils.SharedViewModel
 import com.github.callmeqan.jarviscomposed.utils.getPairedBluetoothDevices
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import org.tensorflow.lite.DataType
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+
+import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.support.common.FileUtil
+import org.tensorflow.lite.support.image.ImageProcessor
+import org.tensorflow.lite.support.image.TensorImage
+import org.tensorflow.lite.support.image.ops.ResizeOp
+import java.nio.ByteBuffer
+import kotlin.math.round
 
 private const val TAG_NAME = "ChatScreen"
 
@@ -52,23 +79,34 @@ private const val TAG_NAME = "ChatScreen"
 @Composable
 fun ChatScreen(
     bluetoothAdapter: BluetoothAdapter,
+    viewModel: SharedViewModel,
+    onNavigate: () -> Unit
 ) {
+    // Get state from View Model
+    val stateURL = viewModel.url
+    val stateChatHistory = viewModel.chatHistory
+    var apiChatbot = viewModel.apiMode
+    val stateDevice = viewModel.device
+
+    // Snack bar
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current // Like `this` keyword in normal java class
+
     // Bluetooth connection state
     var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
     var socket by remember { mutableStateOf<BluetoothSocket?>(null) }
     var isConnecting by remember { mutableStateOf(false) }
     var connectionError by remember { mutableStateOf<String?>(null) }
 
-    // Snackbar
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current // Like `this` keyword in normal java class
-
+    // Bluetooth permission
     val permissions =
         arrayOf(
             Manifest.permission.BLUETOOTH_CONNECT,
             Manifest.permission.BLUETOOTH_SCAN,
             Manifest.permission.INTERNET,
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
         )
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -84,21 +122,28 @@ fun ChatScreen(
             }
         }
     )
-    val topBarState = rememberTopAppBarState()
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
-    val messages = remember { mutableStateListOf<ChatMessage>() }
-    var input by remember { mutableStateOf("") }
 
     // For showing Bluetooth picker dialog
     var showBluetoothDialog by remember { mutableStateOf(false) }
     var pairedDevices by remember { mutableStateOf<List<BluetoothDevice>>(emptyList()) }
 
+    val topBarState = rememberTopAppBarState()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(topBarState)
+
+    // Chatbot UIs init
+    var input by remember { mutableStateOf("") }
+    var messages = remember { mutableStateListOf<ChatMessage>() }
+    if (messages.isEmpty()) {
+        messages = stateChatHistory
+    }
+
     LaunchedEffect(Unit) {
-        val notGranted = permissions.filter {
-            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (notGranted.isNotEmpty()) {
-            permissionLauncher.launch(notGranted.toTypedArray())
+//        val notGranted = permissions.filter {
+//            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+//        }
+        if (stateURL == "") {
+            // Navigate to setting if stateURL is blank
+            onNavigate()
         }
     }
 
@@ -109,10 +154,223 @@ fun ChatScreen(
         }
     }
 
+
+    // Camera setup
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val executor = remember { ContextCompat.getMainExecutor(context) }
+
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA))
+        }
+    }
+
+    @Composable
+    fun CameraPreview(
+        imageCapture: ImageCapture,
+        modifier: Modifier = Modifier,
+    ) {
+        AndroidView(
+            modifier = modifier,
+            factory = { ctx ->
+                val previewView = PreviewView(ctx).apply {
+                    scaleType = PreviewView.ScaleType.FILL_CENTER
+                }
+
+                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                cameraProviderFuture.addListener({
+                    val cameraProvider = cameraProviderFuture.get()
+
+                    val previewUseCase = Preview.Builder()
+                        .build()
+                        .also { it.setSurfaceProvider(previewView.surfaceProvider) }
+
+                    try {
+                        cameraProvider.unbindAll()
+                        cameraProvider.bindToLifecycle(
+                            lifecycleOwner,
+                            CameraSelector.DEFAULT_BACK_CAMERA,
+                            previewUseCase,
+                            imageCapture
+                        )
+                    } catch (exc: Exception) {
+                        Log.e("CameraPreview", "Use case binding failed", exc)
+                    }
+                }, ContextCompat.getMainExecutor(ctx))
+
+                previewView
+            }
+        )
+    }
+
+    fun Bitmap.rotate(degrees: Float): Bitmap {
+        val matrix = Matrix().apply { postRotate(degrees) }
+        return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
+    }
+
+    @Composable
+    fun CameraCaptureOnce(onBitmapCaptured: (Bitmap) -> Unit) {
+        val imageCapture = remember { ImageCapture.Builder().build() }
+        var captured by remember { mutableStateOf(false) }
+
+        Box(Modifier.fillMaxSize()) {
+            CameraPreview(imageCapture = imageCapture, modifier = Modifier.matchParentSize())
+
+            Button(
+                onClick = {
+                    if (!captured) {
+                        captured = true
+                        imageCapture.takePicture(
+                            executor,
+                            object : ImageCapture.OnImageCapturedCallback() {
+                                override fun onCaptureSuccess(imageProxy: ImageProxy) {
+                                    // As original image is rotated
+                                    // we must capture and re-rotate it.
+                                    // Must be done before putting into UI
+                                    // as it will mess things up.
+                                    var bitmap = imageProxy.toBitmap()
+                                    bitmap = bitmap.rotate(90f)
+                                    imageProxy.close()
+                                    onBitmapCaptured(bitmap)
+                                }
+
+                                override fun onError(exc: ImageCaptureException) {
+                                    Log.e("CameraCapture", "Capture failed", exc)
+                                }
+                            }
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+            ) {
+                Text(if (captured) "Captured" else "Capture")
+            }
+        }
+    }
+
+    // CNN model
+    val tfliteModelName =
+        "model_15kb_13e-2ms_dataset_v3.tflite" //should be in assets folder model_17kb
+    val numClasses = 1
+    val interpreter = Interpreter(
+        FileUtil.loadMappedFile(context, tfliteModelName),
+        Interpreter.Options() // TfLite Options
+    )
+
+    // Function for CNN model
+    fun convertBitmapToByteBuffer(bitmapUnresized: Bitmap, width: Int, height: Int): ByteBuffer {
+        val imageProcessor = ImageProcessor.Builder()
+            .add(ResizeOp(height, width, ResizeOp.ResizeMethod.BILINEAR))
+            .build()
+
+        // Initialize TensorImage for float32 model
+        val tensorImage = TensorImage(DataType.FLOAT32)
+        tensorImage.load(bitmapUnresized)  // loads and applies the Bitmap
+        val processedImage = imageProcessor.process(tensorImage)
+
+        val buffer = processedImage.buffer
+        return buffer
+    }
+
+    fun loadBitmapFromAssets(context: Context, fileName: String): Bitmap {
+        // Mainly for testing purposes; fileName could
+        // the name (e.g., "bright.png") of image in
+        // app/src/main/assets/images directory.
+        val assetManager = context.assets
+        val inputStream = assetManager.open("test_images/$fileName")
+        return BitmapFactory.decodeStream(inputStream)
+    }
+
+    fun runModel(context: Context, bitmap: Bitmap): Int {
+        /* Sample use:
+        val bitmap = loadBitmapFromAssets(context, input)
+        runModel(bitmap)
+        */
+        try {
+            // Get input buffer; convertBitmapToByteBuffer for more info
+            val width = 224
+            val height = 224
+
+            val inputBuffer = convertBitmapToByteBuffer(bitmap, width, height)
+            inputBuffer.rewind()
+
+            // For Int8:
+            // val output = Array(1) { ByteArray(numClasses) }
+
+            // For float32:
+            val output = Array(1) { FloatArray(numClasses) }
+
+            // Get the output and status
+            interpreter.run(inputBuffer, output)
+            val status: Int
+            if (output[0][0] > 0.6) {
+                status = 1
+            } else {
+                status = 0
+            }
+
+            // Write the message
+            val msg = "It is ${round(output[0][0] * 100)}% dark (${output[0][0]})!"
+            Log.d("InferenceResult: ", msg)
+            messages.add(
+                ChatMessage(
+                    message = msg,
+                    role = "assistant"
+                )
+            )
+            // If dark return 1, bright return 0
+            return status
+        } catch (_: Exception) {
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    message = "Cannot inference model!",
+                    actionLabel = "",
+                    duration = SnackbarDuration.Short
+                )
+            }
+            // If error return -1
+            return -1
+        }
+    }
+
+    fun onResultCNN(result: Int, severMsg: String = "") {
+        apiChatbot = "chatbot/bluetooth_processor"
+        viewModel.updateApi(apiChatbot)
+        if (result == 1) {
+            messages.add(
+                ChatMessage(
+                    message = "The place seems to be dark! Would you need some light?",
+                    role = "assistant"
+                )
+            )
+        } else if (result == 0) {
+            messages.add(
+                ChatMessage(
+                    message = "The place seems to be bright! Would you want to turn off the light?",
+                    role = "assistant"
+                )
+            )
+        } else {
+            messages.add(
+                ChatMessage(
+                    message = "There are some errors: $severMsg",
+                    role = "assistant"
+                )
+            )
+        }
+    }
+
     // Request permissions if do not have yet
     fun requestPermissions() {
         val notGranted = permissions.filter { permission ->
-            ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(
+                context,
+                permission
+            ) != PackageManager.PERMISSION_GRANTED
         }
 
         if (notGranted.isNotEmpty()) {
@@ -127,103 +385,6 @@ fun ChatScreen(
         for (permission in permissions.toList()) {
             Log.d(TAG_NAME, "   - $permission")
         }
-    }
-
-    fun sendCommand2Server(message: String, role: String = "user") {
-        val okHttpClient = OkHttpClient.Builder()
-            .connectTimeout(60, TimeUnit.SECONDS) // Time waiting for connection
-            .readTimeout(60, TimeUnit.SECONDS)    // Time for reading data
-            .writeTimeout(60, TimeUnit.SECONDS)   // Time for writing data
-            .build()
-
-        // On below line we are creating a retrofit
-        // Builder and passing our base url
-        val retrofit = Retrofit.Builder()
-            .baseUrl("https://7cd1-2405-4802-a2d2-dd50-710c-6251-e6ae-9bcd.ngrok-free.app/")
-
-            // Custom timeout config (AI model takes a long time to respond)
-            .client(okHttpClient)
-
-            // As we are sending data in json format so we have to add Gson converter factory
-            .addConverterFactory(GsonConverterFactory.create())
-
-            // At last we are building our retrofit builder.
-            .build()
-
-        // Below line is to create an instance for our retrofit api class.
-        val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
-
-        // Passing data from our text fields to our modal class.
-        val chatMessage = ChatMessage(message, role)
-
-        // Calling a method to create a post and passing our modal class.
-        val call: Call<ChatMessage?>? = retrofitAPI.sendMessage2Server(chatMessage)
-        scope.launch{
-            snackbarHostState.showSnackbar(
-                message = "Message has being sent to server",
-                actionLabel = "",
-                duration = SnackbarDuration.Short
-            )
-        }
-
-        // On below line we are executing our method.
-        call!!.enqueue(object : Callback<ChatMessage?> {
-            override fun onResponse(call: Call<ChatMessage?>, response: Response<ChatMessage?>) {
-                // This method is called when we get response from our api.
-                scope.launch{
-                    snackbarHostState.showSnackbar(
-                        message = "Message sent to API server",
-                        actionLabel = "",
-                        duration = SnackbarDuration.Short
-                    )
-                }
-
-                // We are getting response from our body and passing it to our modal class.
-                val responseBody: ChatMessage? = response.body()
-
-                // On below line we are getting our data from modal class and adding it to our string.
-                if (response.isSuccessful){
-                    val responseString = "Response Code : " + "201" + "\n" + "message : " +responseBody!!.message + "\n" + "role : " + responseBody!!.role
-                    messages.add(
-                        ChatMessage(
-                            message = responseBody.message,
-                            role = "assistant"
-                        )
-                    )
-
-                    // Below line we are setting our string to our text view.
-                    // This method is called when we get response from our api.
-                    scope.launch{
-                        snackbarHostState.showSnackbar(
-                            message = responseString,
-                            actionLabel = "",
-                            duration = SnackbarDuration.Short
-                        )
-                    }
-                }
-                else {
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "Null response from Server",
-                            actionLabel = "",
-                            duration = SnackbarDuration.Short
-                        )
-                    }
-                }
-            }
-
-            override fun onFailure(call: Call<ChatMessage?>, t: Throwable) {
-
-                // Setting text to our text view when we get error response from API.
-                scope.launch{
-                    snackbarHostState.showSnackbar(
-                        message = "Error found : " + t.message,
-                        actionLabel = "",
-                        duration = SnackbarDuration.Short
-                    )
-                }
-            }
-        })
     }
 
     // Connect to device (in coroutine)
@@ -241,6 +402,178 @@ fun ChatScreen(
         }
     }
 
+    // Send message to ESP32
+    fun sendCommand2ESP32(input: String) {
+        // When connected, send message to device
+        messages.add(
+            ChatMessage(
+                message = "Your command: $input",
+                role = "assistant"
+            )
+        )
+
+        // If connected then send the message
+        if (socket != null && socket!!.isConnected) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    socket!!.outputStream.write(input.toByteArray())
+                    socket!!.outputStream.flush()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    // Send command to server (check RetrofitAPI for the api code choices)
+    fun sendMessageToServer(message: String, role: String = "user", api: String = "fcc") {
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS) // Time waiting for connection
+            .readTimeout(60, TimeUnit.SECONDS)    // Time for reading data
+            .writeTimeout(60, TimeUnit.SECONDS)   // Time for writing data
+            .build()
+
+        // On below line we are creating a retrofit
+        // Builder and passing our base url
+        val retrofit: Retrofit
+        try {
+            retrofit = Retrofit.Builder()
+                .baseUrl(viewModel.url + "/")
+
+                // Custom timeout config (AI model takes a long time to respond)
+                .client(okHttpClient)
+
+                // As we are sending data in json format so we have to add Gson converter factory
+                .addConverterFactory(GsonConverterFactory.create())
+
+                // At last we are building our retrofit builder.
+                .build()
+        } catch (_: Exception) {
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    message = "Invalid URL!",
+                    actionLabel = "",
+                    duration = SnackbarDuration.Short
+                )
+            }
+            return Unit
+        }
+
+        // Below line is to create an instance for our retrofit api class.
+        val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
+
+        // Passing data from our text fields to our modal class.
+        val chatMessage = ChatMessage(message, role)
+
+        // Calling a method to create a post and passing our modal class.
+        val call: Call<ChatMessage?>?
+        if (api == "chatbot/bluetooth_processor") {
+            call = retrofitAPI.sendToCommandProcessor(chatMessage)
+        } else if (api == "chatbot/function_call_chatbot") {
+            call = retrofitAPI.sendToFunctionCallChatbot(chatMessage)
+        } else {
+            // (api == "chatbot/vanilla")
+            call = retrofitAPI.sendToVanillaChatbot(chatMessage)
+        }
+
+        scope.launch {
+            snackbarHostState.showSnackbar(
+                message = "Message has being sent to server",
+                actionLabel = "",
+                duration = SnackbarDuration.Short
+            )
+        }
+
+        // On below line we are executing our method.
+        call!!.enqueue(object : Callback<ChatMessage?> {
+            override fun onResponse(call: Call<ChatMessage?>, response: Response<ChatMessage?>) {
+                // This method is called when we get response from our api.
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "Message sent to API server",
+                        actionLabel = "",
+                        duration = SnackbarDuration.Short
+                    )
+                }
+
+                // We are getting response from our body and passing it to our modal class.
+                val responseBody: ChatMessage? = response.body()
+
+                // On below line we are getting our data from modal class and adding it to our string.
+                if (response.isSuccessful) {
+                    val responseString =
+                        "Response Code : " + "201" + "\n" + "message : " + responseBody!!.message + "\n" + "role : " + responseBody.role
+                    // When logic, like if but funner
+                    when (api) {
+                        "chatbot/vanilla" -> {
+                            messages.add(
+                                ChatMessage(
+                                    message = responseBody.message,
+                                    role = "assistant"
+                                )
+                            )
+                        }
+
+                        "chatbot/function_call_chatbot" -> {
+                            messages.add(
+                                ChatMessage(
+                                    message = responseBody.message,
+                                    role = "assistant"
+                                )
+                            )
+                        }
+
+                        "chatbot/bluetooth_processor" -> {
+                            // Messages' addition will be done in the function
+                            sendCommand2ESP32(responseBody.message)
+                        }
+
+                        else -> {
+                            // Add command of Bluetooth processor
+                            messages.add(
+                                ChatMessage(
+                                    message = "Wrong API server (server-side error)!",
+                                    role = "assistant"
+                                )
+                            )
+                        }
+                    }
+
+
+                    // Below line we are setting our string to our text view.
+                    // This method is called when we get response from our api.
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            message = responseString,
+                            actionLabel = "",
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+                } else {
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            message = "Null response from Server",
+                            actionLabel = "",
+                            duration = SnackbarDuration.Short
+                        )
+                    }
+                }
+            }
+
+            override fun onFailure(call: Call<ChatMessage?>, t: Throwable) {
+
+                // Setting text to our text view when we get error response from API.
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "Error found : " + t.message,
+                        actionLabel = "",
+                        duration = SnackbarDuration.Short
+                    )
+                }
+            }
+        })
+    }
+
     fun sendBtnOnClick() {
         val inputCopy = input
         if (inputCopy.isNotBlank()) {
@@ -251,25 +584,13 @@ fun ChatScreen(
                     role = "user"
                 )
             )
-            // TODO: If isToAI = False (could be toggled) -> Skip this part
-            sendCommand2Server(
+
+            // Send Message to chatbot
+            sendMessageToServer(
                 message = inputCopy,
                 role = "user",
+                api = apiChatbot
             )
-            // When connected, send message to device
-            if (socket != null && socket!!.isConnected) {
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        socket!!.outputStream.write(inputCopy.toByteArray())
-                        socket!!.outputStream.flush()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            }
-            else {
-                requestPermissions()
-            }
             input = ""
         }
     }
@@ -282,14 +603,17 @@ fun ChatScreen(
             val recognizedText = matches?.getOrNull(0)
             if (recognizedText != null) {
                 Log.i(TAG_NAME, "Recognized text: $recognizedText")
-
                 // TODO: Add function to connect server, feed text to AI
-
                 messages.add(
                     ChatMessage(
                         message = recognizedText,
                         role = "user"
                     )
+                )
+                sendMessageToServer(
+                    message = recognizedText,
+                    role = "user",
+                    api = apiChatbot
                 )
             }
         }
@@ -306,18 +630,26 @@ fun ChatScreen(
         speechLauncher.launch(intent)
     }
 
-    fun settingBtnOnClick() {
+    fun bluetoothBtnOnClick() {
         // Helper function to check if all permissions are granted
         val hasRequiredPermissions = permissions.all { permission ->
-            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(
+                context,
+                permission
+            ) == PackageManager.PERMISSION_GRANTED
         }
 
         if (hasRequiredPermissions) {
+            // Get devices
             pairedDevices = getPairedBluetoothDevices(bluetoothAdapter)
             showBluetoothDialog = true
         } else {
             requestPermissions()
         }
+    }
+
+    fun settingBtnOnClick() {
+        onNavigate()
     }
 
     Scaffold(
@@ -345,6 +677,8 @@ fun ChatScreen(
                     else -> "Not connected"
                 },
                 settingBtnOnClick = { settingBtnOnClick() },
+                bluetoothBtnOnClick = { bluetoothBtnOnClick() },
+                showBluetoothConfig = true
             )
         },
         containerColor = Color.Transparent,
@@ -354,7 +688,6 @@ fun ChatScreen(
                 .padding(paddingValues = paddingValues)
                 .padding(bottom = 16.dp)
                 .fillMaxSize(),
-//            verticalArrangement = Arrangement.Bottom
         ) {
             LazyColumn(
                 modifier = Modifier
@@ -367,10 +700,49 @@ fun ChatScreen(
                 }
             }
 
+            var capturing by remember { mutableStateOf(false) }
+            Row {
+                CameraCaptureButton(
+                    modifier = Modifier
+                        .padding(16.dp)
+                ) {
+                    // On click function to change camera status
+                    capturing = !capturing
+                }
+                LlmModeDropUp(
+                    viewModel = viewModel
+                ) { code ->
+                    viewModel.updateApi(newApi = code)
+                    apiChatbot = code
+                }
+            }
+
+            if (capturing) {
+                Column {
+                    CameraCaptureOnce { bmp ->
+                        // Use captured bitmap
+                        Log.d("MainActivity", "Bitmap captured: ${bmp.width}×${bmp.height}")
+
+                        // Add bitmap to chat history
+                        messages.add(
+                            ChatMessage(message = "", image = bmp, role = "user")
+                        )
+
+                        // Inference CNN model and display request
+                        val status = runModel(context = context, bitmap = bmp)
+                        onResultCNN(status)
+                    }
+                }
+            }
+
             MessageInputField(
                 value = input,
                 onValueChange = { input = it },
-                sendBtnOnClick = ::sendBtnOnClick,
+                sendBtnOnClick = {
+                    scope.launch {
+                        sendBtnOnClick()
+                    }
+                },
                 micBtnOnClick = ::micBtnOnClick
             )
         }
@@ -387,6 +759,10 @@ fun ChatScreen(
                 isConnecting = true
                 connectionError = null
                 connectedDevice = device
+
+                // Update view model
+                viewModel.connectTo(device)
+
                 // Try to connect in background
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
