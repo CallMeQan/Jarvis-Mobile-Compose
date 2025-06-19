@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.github.callmeqan.jarviscomposed.data.LoginRequest
 import com.github.callmeqan.jarviscomposed.data.Uid
@@ -288,6 +289,75 @@ class SharedViewModel() : ViewModel() {
     }
     // To use getProfile: Call when you need user info (e.g., for chat log, profile, etc.)
     // fun getProfile(context: Context) { /* TODO: implement if needed */ }
+
+    fun forgotPassword(context: Context, email: String) {
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
+        val retrofit: Retrofit
+        try {
+            retrofit = Retrofit.Builder()
+                .baseUrl(url + "/")
+                .client(okHttpClient)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Network client setup error: ${e.message}")
+            return
+        }
+        val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, registrationMessage = null)
+            try {
+                // Only email is required for forgot password, fill other fields with blank/empty
+                val response = retrofitAPI.forgotPassword(Uid(email = email, password = ""))
+                if (response != null) {
+                    _uiState.value = _uiState.value.copy(isLoading = false, registrationMessage = "Reset link sent to your email (mock)")
+                } else {
+                    _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Failed to send reset link")
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Forgot password error: ${e.message}")
+            }
+        }
+    }
+
+    fun recoverPassword(context: Context, token: String, newPassword: String, confirmPassword: String) {
+        val okHttpClient = OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
+        val retrofit: Retrofit
+        try {
+            retrofit = Retrofit.Builder()
+                .baseUrl(url + "/")
+                .client(okHttpClient)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Network client setup error: ${e.message}")
+            return
+        }
+        val retrofitAPI = retrofit.create(RetrofitAPI::class.java)
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, registrationMessage = null)
+            try {
+                val response = retrofitAPI.recoverPassword(
+                    com.github.callmeqan.jarviscomposed.data.RecoverToken(token, newPassword, confirmPassword)
+                )
+                if (response != null) {
+                    _uiState.value = _uiState.value.copy(isLoading = false, registrationMessage = "Password updated successfully")
+                } else {
+                    _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Failed to update password")
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Recover password error: ${e.message}")
+            }
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()
