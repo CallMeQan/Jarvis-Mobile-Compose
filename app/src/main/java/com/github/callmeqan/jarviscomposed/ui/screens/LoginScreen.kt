@@ -213,6 +213,26 @@ fun LoginScreen(
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
+
+            // Show red warning if not connected to a server (url is blank or default)
+            if (viewModel.url.isBlank() || viewModel.url == "http://10.0.2.2:8000/") {
+                Text(
+                    text = "You must connect to a server in Settings before logging in!",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 24.dp)
+                )
+            }
+
+            // Back to Chat button
+            if (true) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = { navController.navigate("chat") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Back to Chat")
+                }
+            }
         }
     }
 }
