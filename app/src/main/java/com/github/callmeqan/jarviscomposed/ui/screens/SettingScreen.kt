@@ -97,32 +97,32 @@ fun SettingScreen(
                     modifier = Modifier.padding(start = 8.dp)
                 )
             }
-        }
-        Button(
-            onClick = ::debugButtonOnClick,
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (viewModel.DEBUG)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = if (viewModel.DEBUG)
-                    MaterialTheme.colorScheme.onPrimary
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant
-            ),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Settings,
-                contentDescription = "Debug",
-                modifier = Modifier.size(20.dp)
-            )
-            Text(
-                text = "Debug",
-                modifier = Modifier.padding(start = 8.dp)
-            )
+            Button(
+                onClick = ::debugButtonOnClick,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (viewModel.DEBUG)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (viewModel.DEBUG)
+                        MaterialTheme.colorScheme.onPrimary
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Settings,
+                    contentDescription = "Debug",
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Debug",
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
         }
     }
 }
