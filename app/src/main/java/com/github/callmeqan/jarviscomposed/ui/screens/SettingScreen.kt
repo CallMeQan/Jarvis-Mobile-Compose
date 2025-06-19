@@ -23,11 +23,11 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import com.github.callmeqan.jarviscomposed.ui.components.ChatAppBar
 import com.github.callmeqan.jarviscomposed.utils.SharedViewModel
-import com.github.callmeqan.jarviscomposed.utils.getPairedBluetoothDevices
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.Settings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,7 +35,6 @@ fun SettingScreen(
     viewModel: SharedViewModel,
     onNavigateToMain: () -> Unit
 ) {
-    // Get data from view model
     var urlText by remember { mutableStateOf(viewModel.url) }  // Start with ViewModel’s URL
     val devices = remember { viewModel.devices }
 
@@ -47,6 +46,10 @@ fun SettingScreen(
     fun urlButtonOnClick() {
         // Helper function to check if all permissions are granted
         viewModel.updateUrl(urlText)
+        onNavigateToMain()
+    }
+    fun debugButtonOnClick(){
+        viewModel.updateDebugState(!viewModel.DEBUG)
         onNavigateToMain()
     }
 
@@ -94,6 +97,32 @@ fun SettingScreen(
                     modifier = Modifier.padding(start = 8.dp)
                 )
             }
+        }
+        Button(
+            onClick = ::debugButtonOnClick,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (viewModel.DEBUG)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = if (viewModel.DEBUG)
+                    MaterialTheme.colorScheme.onPrimary
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant
+            ),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Settings,
+                contentDescription = "Debug",
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = "Debug",
+                modifier = Modifier.padding(start = 8.dp)
+            )
         }
     }
 }
