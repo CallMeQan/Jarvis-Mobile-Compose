@@ -46,14 +46,14 @@ interface RetrofitAPI {
     @POST("auth/refresh")
     fun refreshToken(@Header("Authorization") refreshToken: String): Response<LoginResponse> // Used for JWT refresh
 
-    @POST("auth//logout")
+    @POST("auth/logout")
     fun logout(): Response<MessageResponse> // Used to clear client tokens
 
     // wtf am i doing here
     @POST("auth/forgot-password")
     fun forgotPassword(@Body clientMessage: Uid?): Call<Uid?>?
 
-    @POST("auth//recover-password?a=<token>")
+    @POST("auth/recover-password?a=<token>")
     fun recoverPassword(@Body clientMessage: RecoverToken?): Call<RecoverToken?>?
 
 }
