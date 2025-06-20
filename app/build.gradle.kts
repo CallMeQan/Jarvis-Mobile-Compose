@@ -39,6 +39,8 @@ android {
     }
 }
 
+
+
 dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
@@ -68,6 +70,9 @@ dependencies {
     implementation(libs.tensorflow.lite)
     implementation(libs.tensorflow.lite.gpu)
     implementation(libs.tensorflow.lite.task.vision)
+
+    // Jetpack DataStore
+    implementation(libs.androidx.datastore.preferences)
 
     // Load dotenv
     implementation(libs.dotenv.kotlin)

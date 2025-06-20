@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Login
+import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,6 +27,10 @@ import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.Button
 import androidx.compose.ui.platform.LocalContext
+//import com.github.callmeqan.jarviscomposed.ui.screens.SettingsActivity
+
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,9 +38,22 @@ fun ChatAppBar(
     statusTxt: String,
     settingBtnOnClick: () -> Unit,
     bluetoothBtnOnClick: () -> Unit = {},
-    showBluetoothConfig: Boolean = false
+    showBluetoothConfig: Boolean = false,
+    isLoggedIn: Boolean = false,
+    loginLogoutBtnOnClick: () -> Unit = {},
 ) {
+    // Lấy Context
+    val context = LocalContext.current
     CenterAlignedTopAppBar(
+        navigationIcon = {
+            IconButton(onClick = { loginLogoutBtnOnClick() }) {
+                if (isLoggedIn) {
+                    Icon(Icons.Outlined.Logout, contentDescription = "Logout")
+                } else {
+                    Icon(Icons.Outlined.Login, contentDescription = "Login")
+                }
+            }
+        },
         title = {
             Column(
                 verticalArrangement = Arrangement.Center,
@@ -60,7 +79,8 @@ fun ChatAppBar(
                         ),
                         modifier = Modifier.clickable { bluetoothBtnOnClick() }
                     )
-                } else {
+                }
+                else {
                     Text(
                         text = statusTxt,
                         style = TextStyle(
@@ -85,7 +105,6 @@ fun ChatAppBar(
 
         actions = {
             IconButton(onClick = {
-                // Get callback (if yes) rồi mở SettingsActivity
                 settingBtnOnClick()
 //                context.startActivity(Intent(context, SettingsActivity::class.java))
             }) {
