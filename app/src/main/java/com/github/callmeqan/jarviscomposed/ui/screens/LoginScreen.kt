@@ -52,7 +52,7 @@ fun LoginScreen(
                 settingBtnOnClick = {},
                 showBluetoothConfig = false,
                 isLoggedIn = false,
-                loginLogoutBtnOnClick = {},
+                loginLogoutBtnOnClick = { navController.navigate("chat") }, // App bar left icon navigates to ChatScreen
             )
         },
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
@@ -123,7 +123,10 @@ fun LoginScreen(
                 CircularProgressIndicator()
             } else {
                 Button(
-                    onClick = { viewModel.submit(context) },
+                    onClick = {
+                        viewModel.submit(context)
+                        // Removed navigation to ChatScreen here
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (uiState.authMode == SharedViewModel.AuthMode.LOGIN) "Login" else "Register")
@@ -239,17 +242,6 @@ fun LoginScreen(
                 )
             }
             // Allow login/register button to always be enabled, regardless of server connection
-
-            // Back to Chat button
-            if (true) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = { navController.navigate("chat") },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Back to Chat")
-                }
-            }
         }
     }
 }
