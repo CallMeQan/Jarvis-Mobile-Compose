@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.navigation.NavController
 import com.github.callmeqan.jarviscomposed.data.ChatMessage
 import com.github.callmeqan.jarviscomposed.ui.components.BluetoothDevicePickerDialog
 import com.github.callmeqan.jarviscomposed.ui.components.CameraCaptureButton
@@ -64,7 +65,8 @@ private const val TAG_NAME = "ChatScreen"
 fun ChatScreen(
     bluetoothAdapter: BluetoothAdapter,
     viewModel: SharedViewModel,
-    onNavigate: () -> Unit
+    onNavigate: () -> Unit,
+    navController: NavController? = null
 ) {
     // Get state from View Model
     val stateURL = viewModel.url
@@ -115,7 +117,7 @@ fun ChatScreen(
 
     // Chatbot UIs init
     var input by remember { mutableStateOf("") }
-    var messages = remember { mutableStateListOf<ChatMessage>() }
+    var messages = remember { mutableStateListOf<ChatMessage>() } //chat log
     if (messages.isEmpty()) {
         messages = stateChatHistory
     }
@@ -124,7 +126,7 @@ fun ChatScreen(
 //        val notGranted = permissions.filter {
 //            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
 //        }
-        if (stateURL == "") {
+        if (stateURL == "" && false) {
             // Navigate to setting if stateURL is blank
             onNavigate()
         }
@@ -474,7 +476,7 @@ fun ChatScreen(
             val recognizedText = matches?.getOrNull(0)
             if (recognizedText != null) {
                 Log.i(TAG_NAME, "Recognized text: $recognizedText")
-                // TODO: Add function to connect server, feed text to AI
+                // TODO: Add function to connect server, feed text to AI / google voice recognition
                 messages.add(
                     ChatMessage(
                         message = recognizedText,
@@ -523,6 +525,18 @@ fun ChatScreen(
         onNavigate()
     }
 
+    val isLoggedIn = viewModel.uiState.collectAsState().value.loginSuccess
+    var showLoginScreen by remember { mutableStateOf(false) }
+
+    fun loginLogoutBtnOnClick() {
+        if (isLoggedIn) {
+            viewModel.logout(context)
+        } else {
+            // Navigate to login screen instead of setting
+            navController?.navigate("login")
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         modifier = Modifier
@@ -546,7 +560,9 @@ fun ChatScreen(
                 },
                 settingBtnOnClick = { settingBtnOnClick() },
                 bluetoothBtnOnClick = { bluetoothBtnOnClick() },
-                showBluetoothConfig = true
+                showBluetoothConfig = true,
+                isLoggedIn = isLoggedIn,
+                loginLogoutBtnOnClick = { loginLogoutBtnOnClick() }
             )
         },
         containerColor = Color.Transparent,
@@ -620,6 +636,42 @@ fun ChatScreen(
                 micBtnOnClick = ::micBtnOnClick
             )
         }
+
+        // Bluetooth device picker dialog
+        if (showBluetoothDialog) {
+            BluetoothDevicePickerDialog(
+                devices = pairedDevices,
+                onDismiss = { showBluetoothDialog = false },
+                onDeviceSelected = { device ->
+                    showBluetoothDialog = false
+                    // Start connecting, update state
+                    isConnecting = true
+                    connectionError = null
+                    connectedDevice = device
+
+                    // Update view model
+                    viewModel.connectTo(device)
+
+                    // Try to connect in background
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            val result = connectToDevice(device)
+                            socket = result
+                            isConnecting = false
+                            connectionError = if (result == null) "Failed to connect" else null
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            )
+        }
+
+        if (showLoginScreen) {
+            // Use your navigation logic here, or show LoginScreen directly if using Compose navigation
+            onNavigate()
+            showLoginScreen = false
+        }
     }
 
     // Bluetooth device picker dialog
@@ -646,4 +698,7 @@ fun ChatScreen(
             }
         )
     }
+
+
 }
+
